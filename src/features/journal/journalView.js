@@ -764,12 +764,9 @@ class JournalView {
               ${statusText}
             </span>
           </td>
-          <td class="journal-table__actions">
-            <button class="journal-table__action-btn journal-table__action-btn--delete" data-action="delete" data-id="${trade.id}" title="Delete trade">🗑️</button>
-          </td>
         </tr>
         <tr class="journal-table__row-details ${isExpanded ? 'expanded' : ''}" data-details-id="${trade.id}">
-          <td colspan="10">
+          <td colspan="9">
             ${this.renderRowDetails(trade)}
           </td>
         </tr>
@@ -854,10 +851,6 @@ class JournalView {
     // Make rows clickable to expand
     this.elements.tableBody.querySelectorAll('.journal-table__row').forEach(row => {
       row.addEventListener('click', (e) => {
-        // Don't expand if clicking on action buttons
-        if (e.target.closest('.journal-table__action-btn')) {
-          return;
-        }
         const id = parseInt(row.dataset.id);
         this.toggleRowExpand(id);
       });
@@ -865,19 +858,17 @@ class JournalView {
       row.style.cursor = 'pointer';
     });
 
-    // Close/Trim buttons
+    // Close/Trim buttons (in expanded details)
     this.elements.tableBody.querySelectorAll('[data-action="close"]').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent row click
         const id = parseInt(e.currentTarget.dataset.id);
         trimModal.open(id);
       });
     });
 
-    // Delete buttons
+    // Delete buttons (in expanded details)
     this.elements.tableBody.querySelectorAll('[data-action="delete"]').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent row click
         const id = parseInt(e.currentTarget.dataset.id);
         if (confirm('Delete this trade?')) {
           state.deleteJournalEntry(id);

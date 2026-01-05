@@ -340,6 +340,7 @@
   display: flex;
   gap: var(--space-1);
   justify-content: center;
+  align-items: center;
   text-align: center;
 }
 
