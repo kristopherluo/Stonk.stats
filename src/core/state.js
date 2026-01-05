@@ -20,6 +20,12 @@ class AppState {
         maxPositionPercent: 100
       },
 
+      cashFlow: {
+        transactions: [], // { id, type: 'deposit'|'withdrawal', amount, timestamp }
+        totalDeposits: 0,
+        totalWithdrawals: 0
+      },
+
       trade: {
         ticker: '',
         entry: null,
@@ -115,6 +121,35 @@ class AppState {
     const oldAccount = { ...this.state.account };
     Object.assign(this.state.account, updates);
     this.emit('accountChanged', { old: oldAccount, new: this.state.account });
+  }
+
+  // Cash Flow methods
+  addCashFlowTransaction(type, amount) {
+    const transaction = {
+      id: Date.now(),
+      type, // 'deposit' or 'withdrawal'
+      amount,
+      timestamp: new Date().toISOString()
+    };
+
+    this.state.cashFlow.transactions.unshift(transaction);
+
+    if (type === 'deposit') {
+      this.state.cashFlow.totalDeposits += amount;
+      this.state.account.currentSize += amount;
+    } else if (type === 'withdrawal') {
+      this.state.cashFlow.totalWithdrawals += amount;
+      this.state.account.currentSize -= amount;
+    }
+
+    this.saveCashFlow();
+    this.emit('cashFlowChanged', this.state.cashFlow);
+    this.emit('accountSizeChanged', this.state.account.currentSize);
+    return transaction;
+  }
+
+  getCashFlowNet() {
+    return this.state.cashFlow.totalDeposits - this.state.cashFlow.totalWithdrawals;
   }
 
   // Trade methods
@@ -241,6 +276,34 @@ class AppState {
       }
     } catch (e) {
       console.error('Failed to load journal:', e);
+    }
+  }
+
+  saveCashFlow() {
+    try {
+      localStorage.setItem('riskCalcCashFlow', JSON.stringify(this.state.cashFlow));
+    } catch (e) {
+      console.error('Failed to save cash flow:', e);
+    }
+  }
+
+  loadCashFlow() {
+    try {
+      const saved = localStorage.getItem('riskCalcCashFlow');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        this.state.cashFlow = {
+          transactions: parsed.transactions || [],
+          totalDeposits: parsed.totalDeposits || 0,
+          totalWithdrawals: parsed.totalWithdrawals || 0
+        };
+
+        // Apply cash flow to account size
+        const netCashFlow = this.state.cashFlow.totalDeposits - this.state.cashFlow.totalWithdrawals;
+        this.state.account.currentSize += netCashFlow;
+      }
+    } catch (e) {
+      console.error('Failed to load cash flow:', e);
     }
   }
 

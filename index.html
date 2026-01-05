@@ -879,7 +879,7 @@
       <!-- Summary Bar -->
       <div class="journal-summary-bar" id="journalSummaryBar">
         <div class="journal-summary-bar__item journal-summary-bar__item--hero">
-          <span class="journal-summary-bar__label"><span class="journal-summary-bar__emoji">💰</span> Total P&L</span>
+          <span class="journal-summary-bar__label"><span class="journal-summary-bar__emoji">💰</span> Realized P&L</span>
           <span class="journal-summary-bar__value journal-summary-bar__value--lg" id="journalTotalPnL">$0.00</span>
         </div>
         <div class="journal-summary-bar__item">
@@ -967,15 +967,52 @@
           <span class="stats-header__icon">📊</span>
           <div>
             <h1 class="stats-header__title">Trading Stats</h1>
-            <span class="stats-header__subtitle">All-time performance metrics</span>
+            <span class="stats-header__subtitle" id="statsDateRange">All time</span>
           </div>
         </div>
-        <!-- Period selector (hidden, groundwork for future) -->
-        <div class="stats-header__period">
-          <div class="period-selector">
-            <button class="period-selector__btn period-selector__btn--active" data-period="all">All Time</button>
-            <button class="period-selector__btn" data-period="month">Month</button>
-            <button class="period-selector__btn" data-period="week">Week</button>
+        <div class="stats-header__filters">
+          <div class="filter-dropdown">
+            <button class="filter-dropdown__btn" id="statsFilterBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+              </svg>
+              Filter
+              <span class="filter-dropdown__count" id="statsFilterCount" style="display: none;"></span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="filter-dropdown__panel" id="statsFilterPanel">
+              <div class="filter-dropdown__header">
+                <span class="filter-dropdown__title">FILTERS</span>
+                <button class="filter-dropdown__close" id="statsFilterClose">×</button>
+              </div>
+              <div class="filter-dropdown__section">
+                <label class="filter-dropdown__section-title">Date Range</label>
+                <div class="filter-preset-group">
+                  <button class="btn btn--xs btn--ghost filter-preset-btn active" data-range="all">All time</button>
+                  <button class="btn btn--xs btn--ghost filter-preset-btn" data-range="30">Last 30d</button>
+                  <button class="btn btn--xs btn--ghost filter-preset-btn" data-range="90">Last 3m</button>
+                  <button class="btn btn--xs btn--ghost filter-preset-btn" data-range="365">Last year</button>
+                </div>
+                <div class="filter-date-inputs">
+                  <div class="input-wrapper input-wrapper--sm">
+                    <label class="input-label">From</label>
+                    <input type="date" class="input" id="statsFilterDateFrom" placeholder="mm/dd/yyyy">
+                  </div>
+                  <div class="input-wrapper input-wrapper--sm">
+                    <label class="input-label">To</label>
+                    <input type="date" class="input" id="statsFilterDateTo" placeholder="mm/dd/yyyy">
+                  </div>
+                </div>
+              </div>
+              <div class="filter-dropdown__footer">
+                <button class="btn btn--ghost btn--sm" id="statsClearFilters">Clear All</button>
+                <button class="btn btn--primary btn--sm" id="statsApplyFilters">Apply</button>
+              </div>
+            </div>
+            <!-- Filter backdrop overlay -->
+            <div class="filter-dropdown__backdrop" id="statsFilterBackdrop"></div>
           </div>
         </div>
       </div>
@@ -993,7 +1030,7 @@
             <span class="stat-card__sub" id="statOpenRisk">$0 at risk</span>
           </div>
           <div class="stat-card" id="statPnLCard">
-            <span class="stat-card__label">Total P&L</span>
+            <span class="stat-card__label">Realized P&L</span>
             <span class="stat-card__value" id="statTotalPnL">$0.00</span>
             <span class="stat-card__sub" id="statPnLTrades">0 closed trades</span>
           </div>
@@ -1267,6 +1304,68 @@
         <button class="btn btn--secondary btn--full" id="resetAccountBtn">
           Reset to Starting Balance
         </button>
+      </div>
+
+      <!-- Cash Flow Management -->
+      <div class="settings-section">
+        <h3 class="settings-section__title">Cash Flow Management</h3>
+        <span class="input-hint" style="margin-bottom: var(--space-4); display: block;">Track deposits and withdrawals separately from trading P&L</span>
+
+        <div class="cash-flow-summary">
+          <div class="cash-flow-summary__row">
+            <span class="cash-flow-summary__label">Net Cash Flow</span>
+            <span class="cash-flow-summary__value" id="cashFlowNet">$0.00</span>
+          </div>
+          <div class="cash-flow-summary__breakdown">
+            <div>
+              <span class="cash-flow-summary__sublabel">Deposits</span>
+              <span class="cash-flow-summary__subvalue cash-flow-summary__subvalue--success" id="cashFlowDeposits">$0.00</span>
+            </div>
+            <div>
+              <span class="cash-flow-summary__sublabel">Withdrawals</span>
+              <span class="cash-flow-summary__subvalue cash-flow-summary__subvalue--danger" id="cashFlowWithdrawals">$0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="cash-flow-actions">
+          <div class="input-group">
+            <label class="input-label" for="depositAmount">Deposit</label>
+            <div class="input-with-btn">
+              <div class="input-wrapper input-wrapper--prefix">
+                <span class="input-prefix">$</span>
+                <input type="text" class="input input--mono" id="depositAmount" placeholder="0.00">
+              </div>
+              <button class="btn btn--success" id="depositBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Deposit
+              </button>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label class="input-label" for="withdrawAmount">Withdraw</label>
+            <div class="input-with-btn">
+              <div class="input-wrapper input-wrapper--prefix">
+                <span class="input-prefix">$</span>
+                <input type="text" class="input input--mono" id="withdrawAmount" placeholder="0.00">
+              </div>
+              <button class="btn btn--danger" id="withdrawBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Withdraw
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="cash-flow-history" id="cashFlowHistory">
+          <!-- Transaction history will be populated here -->
+        </div>
       </div>
 
       <!-- Appearance -->
@@ -1575,7 +1674,7 @@
           <span class="trim-preview__value text-success" id="trimProfitPerShare">+$0.00</span>
         </div>
         <div class="trim-preview__row trim-preview__row--total">
-          <span class="trim-preview__label">Total P&L</span>
+          <span class="trim-preview__label">Realized P&L</span>
           <span class="trim-preview__value text-success" id="trimTotalPnL">+$0.00</span>
         </div>
       </div>

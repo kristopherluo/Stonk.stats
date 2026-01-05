@@ -8,6 +8,7 @@ import { showToast } from '../../components/ui/ui.js';
 import { dataManager } from '../../core/dataManager.js';
 import { clearDataModal } from '../../components/modals/clearDataModal.js';
 import { priceTracker } from '../../core/priceTracker.js';
+import { historicalPrices } from '../../core/historicalPrices.js';
 
 class Settings {
   constructor() {
@@ -21,6 +22,14 @@ class Settings {
 
     // Listen for account changes
     state.on('accountSizeChanged', (size) => this.updateAccountDisplay(size));
+
+    // Listen for price updates to refresh header with unrealized P&L
+    state.on('pricesUpdated', () => this.updateAccountDisplay(state.account.currentSize));
+
+    // Listen for journal changes to refresh unrealized P&L
+    state.on('journalEntryAdded', () => this.updateAccountDisplay(state.account.currentSize));
+    state.on('journalEntryUpdated', () => this.updateAccountDisplay(state.account.currentSize));
+    state.on('journalEntryDeleted', () => this.updateAccountDisplay(state.account.currentSize));
   }
 
   cacheElements() {
@@ -49,6 +58,16 @@ class Settings {
       exportDataBtn: document.getElementById('exportDataBtn'),
       importDataBtn: document.getElementById('importDataBtn'),
       clearDataBtn: document.getElementById('clearDataBtn'),
+
+      // Cash Flow
+      cashFlowNet: document.getElementById('cashFlowNet'),
+      cashFlowDeposits: document.getElementById('cashFlowDeposits'),
+      cashFlowWithdrawals: document.getElementById('cashFlowWithdrawals'),
+      depositAmount: document.getElementById('depositAmount'),
+      withdrawAmount: document.getElementById('withdrawAmount'),
+      depositBtn: document.getElementById('depositBtn'),
+      withdrawBtn: document.getElementById('withdrawBtn'),
+      cashFlowHistory: document.getElementById('cashFlowHistory'),
 
       // Summary
       summaryStarting: document.getElementById('summaryStarting'),
@@ -80,14 +99,20 @@ class Settings {
     if (this.elements.settingsAccountSize) {
       const syncAccountSize = (value) => {
         state.updateSettings({ startingAccountSize: value });
-        state.updateAccount({ currentSize: value });
+
+        // Calculate new current size: starting + realized P&L + net cash flow
+        const realizedPnL = state.account.realizedPnL;
+        const netCashFlow = state.getCashFlowNet();
+        const newCurrentSize = value + realizedPnL + netCashFlow;
+
+        state.updateAccount({ currentSize: newCurrentSize });
         this.updateSummary();
         // Sync to Quick Settings field
         if (this.elements.accountSize) {
-          this.elements.accountSize.value = formatWithCommas(value);
+          this.elements.accountSize.value = formatWithCommas(newCurrentSize);
         }
-        this.updateAccountDisplay(value);
-        state.emit('accountSizeChanged', value);
+        this.updateAccountDisplay(newCurrentSize);
+        state.emit('accountSizeChanged', newCurrentSize);
       };
 
       this.elements.settingsAccountSize.addEventListener('input', (e) => {
@@ -185,8 +210,9 @@ class Settings {
     if (this.elements.alphaVantageApiKey) {
       const saveAlphaVantageKey = (apiKey) => {
         localStorage.setItem('alphaVantageApiKey', apiKey);
+        historicalPrices.setApiKey(apiKey);
         if (apiKey) {
-          showToast('✅ Alpha Vantage API key saved - historical charts now available', 'success');
+          showToast('✅ Alpha Vantage API key saved - historical charts and equity curve now available', 'success');
         }
       };
 
@@ -209,6 +235,35 @@ class Settings {
     if (this.elements.resetAccountBtn) {
       this.elements.resetAccountBtn.addEventListener('click', () => this.resetAccount());
     }
+
+    // Cash Flow: Deposit
+    if (this.elements.depositBtn) {
+      this.elements.depositBtn.addEventListener('click', () => this.handleDeposit());
+    }
+    if (this.elements.depositAmount) {
+      this.elements.depositAmount.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.handleDeposit();
+        }
+      });
+    }
+
+    // Cash Flow: Withdraw
+    if (this.elements.withdrawBtn) {
+      this.elements.withdrawBtn.addEventListener('click', () => this.handleWithdraw());
+    }
+    if (this.elements.withdrawAmount) {
+      this.elements.withdrawAmount.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.handleWithdraw();
+        }
+      });
+    }
+
+    // Listen for cash flow changes
+    state.on('cashFlowChanged', () => this.updateCashFlowDisplay());
 
     // Data management buttons
     if (this.elements.exportDataBtn) {
@@ -309,6 +364,7 @@ class Settings {
     state.loadSettings();
     state.loadJournal();
     state.loadJournalMeta();
+    state.loadCashFlow();
 
     // Migrate existing journal entries to new schema
     state.migrateJournalEntries();
@@ -370,9 +426,16 @@ class Settings {
     if (this.elements.alphaVantageApiKey) {
       this.elements.alphaVantageApiKey.value = alphaVantageKey;
     }
+    // Set API key for historical prices
+    if (alphaVantageKey) {
+      historicalPrices.setApiKey(alphaVantageKey);
+    }
 
     // Update header
     this.updateAccountDisplay(state.account.currentSize);
+
+    // Update cash flow display
+    this.updateCashFlowDisplay();
   }
 
   open() {
@@ -411,8 +474,15 @@ class Settings {
   }
 
   updateAccountDisplay(size) {
+    // Get current unrealized P&L from open positions
+    const allOpenTrades = state.journal.entries.filter(e => e.status === 'open' || e.status === 'trimmed');
+    const unrealizedPnL = priceTracker.calculateTotalUnrealizedPnL(allOpenTrades);
+
+    // Include unrealized P&L in display
+    const totalAccount = size + (unrealizedPnL?.totalPnL || 0);
+
     if (this.elements.headerAccountValue) {
-      const newText = formatCurrency(size);
+      const newText = formatCurrency(totalAccount);
       if (this.elements.headerAccountValue.textContent !== newText) {
         this.elements.headerAccountValue.textContent = newText;
         this.flashHeaderAccount();
@@ -420,7 +490,7 @@ class Settings {
     }
 
     if (this.elements.accountSize) {
-      this.elements.accountSize.value = formatWithCommas(size);
+      this.elements.accountSize.value = formatWithCommas(totalAccount);
     }
   }
 
@@ -444,6 +514,111 @@ class Settings {
     state.emit('accountSizeChanged', state.account.currentSize);
 
     showToast('🔄 Account reset to starting balance', 'success');
+  }
+
+  handleDeposit() {
+    if (!this.elements.depositAmount) return;
+
+    const amount = parseNumber(this.elements.depositAmount.value);
+    if (!amount || amount <= 0) {
+      showToast('⚠️ Please enter a valid deposit amount', 'warning');
+      return;
+    }
+
+    state.addCashFlowTransaction('deposit', amount);
+    this.elements.depositAmount.value = '';
+    this.updateSummary();
+    showToast(`✅ Deposited ${formatCurrency(amount)}`, 'success');
+  }
+
+  handleWithdraw() {
+    if (!this.elements.withdrawAmount) return;
+
+    const amount = parseNumber(this.elements.withdrawAmount.value);
+    if (!amount || amount <= 0) {
+      showToast('⚠️ Please enter a valid withdrawal amount', 'warning');
+      return;
+    }
+
+    state.addCashFlowTransaction('withdrawal', amount);
+    this.elements.withdrawAmount.value = '';
+    this.updateSummary();
+    showToast(`✅ Withdrew ${formatCurrency(amount)}`, 'success');
+  }
+
+  updateCashFlowDisplay() {
+    const cashFlow = state.state.cashFlow;
+    const netCashFlow = state.getCashFlowNet();
+
+    // Update summary values
+    if (this.elements.cashFlowNet) {
+      this.elements.cashFlowNet.textContent = formatCurrency(netCashFlow);
+      this.elements.cashFlowNet.style.color = netCashFlow >= 0 ? 'var(--success)' : 'var(--danger)';
+    }
+
+    if (this.elements.cashFlowDeposits) {
+      this.elements.cashFlowDeposits.textContent = formatCurrency(cashFlow.totalDeposits);
+    }
+
+    if (this.elements.cashFlowWithdrawals) {
+      this.elements.cashFlowWithdrawals.textContent = formatCurrency(cashFlow.totalWithdrawals);
+    }
+
+    // Update transaction history
+    this.renderCashFlowHistory();
+  }
+
+  renderCashFlowHistory() {
+    if (!this.elements.cashFlowHistory) return;
+
+    const transactions = state.state.cashFlow.transactions;
+
+    if (transactions.length === 0) {
+      this.elements.cashFlowHistory.innerHTML = '<div class="cash-flow-history__empty">No deposits or withdrawals yet</div>';
+      return;
+    }
+
+    const maxShow = 5; // Show latest 5 transactions
+    const recentTransactions = transactions.slice(0, maxShow);
+
+    const historyHTML = `
+      <div class="cash-flow-history__title">Recent Transactions</div>
+      <div class="cash-flow-history__list">
+        ${recentTransactions.map(t => `
+          <div class="cash-flow-transaction">
+            <div class="cash-flow-transaction__info">
+              <span class="cash-flow-transaction__type cash-flow-transaction__type--${t.type}">
+                ${t.type === 'deposit' ? '↑ Deposit' : '↓ Withdrawal'}
+              </span>
+              <span class="cash-flow-transaction__date">${this.formatTransactionDate(t.timestamp)}</span>
+            </div>
+            <span class="cash-flow-transaction__amount">
+              ${t.type === 'deposit' ? '+' : '-'}${formatCurrency(t.amount)}
+            </span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    this.elements.cashFlowHistory.innerHTML = historyHTML;
+  }
+
+  formatTransactionDate(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 }
 

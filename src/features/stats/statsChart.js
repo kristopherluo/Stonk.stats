@@ -68,6 +68,9 @@ class EquityChart {
     state.on('journalEntryAdded', () => this.render());
     state.on('journalEntryUpdated', () => this.render());
     state.on('journalEntryDeleted', () => this.render());
+
+    // Listen for stats updates (e.g., filter changes)
+    state.on('statsUpdated', () => this.render());
   }
 
   resize() {
@@ -97,10 +100,10 @@ class EquityChart {
     return isLight ? this.lightColors : this.colors;
   }
 
-  render() {
+  async render() {
     if (!this.ctx || !this.canvas) return;
 
-    const data = stats.buildEquityCurve();
+    const data = await stats.buildEquityCurve();
     const width = this.canvas.width / this.dpr;
     const height = this.canvas.height / this.dpr;
 
@@ -161,11 +164,11 @@ class EquityChart {
     // Draw line
     this.drawLine(data, scaleX, scaleY, colors);
 
-    // Draw points
-    this.drawPoints(data, scaleX, scaleY, colors);
-
     // Draw Y-axis labels
     this.drawYAxisLabels(padding, chartHeight, paddedMin, paddedMax, colors);
+
+    // Draw X-axis labels
+    this.drawXAxisLabels(data, scaleX, padding, chartWidth, chartHeight, colors);
   }
 
   drawGrid(padding, chartWidth, chartHeight, minValue, maxValue, colors) {
@@ -259,6 +262,79 @@ class EquityChart {
       const label = this.formatCurrency(value);
       this.ctx.fillText(label, padding.left - 8, y);
     }
+  }
+
+  drawXAxisLabels(data, scaleX, padding, chartWidth, chartHeight, colors) {
+    if (data.length < 2) return;
+
+    this.ctx.fillStyle = colors.text;
+    this.ctx.font = '11px Inter, sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'top';
+
+    const y = padding.top + chartHeight + 8;
+
+    // Determine how many labels to show based on available width
+    const labelWidth = 80; // Approximate width needed per label
+    const maxLabels = Math.max(2, Math.floor(chartWidth / labelWidth));
+    const labelCount = Math.min(maxLabels, data.length);
+
+    // Calculate step size
+    const step = Math.max(1, Math.ceil((data.length - 1) / (labelCount - 1)));
+
+    // Build indices to show, filtering out duplicate dates
+    const indicesToShow = [];
+    const shownDates = new Set();
+
+    // Always show first
+    indicesToShow.push(0);
+    shownDates.add(this.formatDate(data[0].date));
+
+    // Add intermediate labels
+    for (let i = step; i < data.length - 1; i += step) {
+      const dateLabel = this.formatDate(data[i].date);
+      if (!shownDates.has(dateLabel)) {
+        indicesToShow.push(i);
+        shownDates.add(dateLabel);
+      }
+    }
+
+    // Always show last if different from previous
+    const lastIndex = data.length - 1;
+    const lastDateLabel = this.formatDate(data[lastIndex].date);
+    if (!shownDates.has(lastDateLabel)) {
+      const previousIndex = indicesToShow[indicesToShow.length - 1];
+      // Only add if far enough, otherwise replace previous
+      if (lastIndex - previousIndex >= step * 0.6) {
+        indicesToShow.push(lastIndex);
+      } else {
+        indicesToShow[indicesToShow.length - 1] = lastIndex;
+      }
+    }
+
+    // Draw labels
+    indicesToShow.forEach(index => {
+      const point = data[index];
+      const x = scaleX(point.date);
+      const label = this.formatDate(point.date);
+      this.ctx.fillText(label, x, y);
+    });
+  }
+
+  formatDate(timestamp) {
+    const date = new Date(timestamp);
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    const day = date.getDate();
+    const year = date.getFullYear();
+
+    // Show month/day for recent dates, month/year for older ones
+    const now = new Date();
+    const yearDiff = now.getFullYear() - year;
+
+    if (yearDiff > 0) {
+      return `${month} ${year}`;
+    }
+    return `${month} ${day}`;
   }
 
   formatCurrency(value) {

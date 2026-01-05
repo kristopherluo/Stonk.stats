@@ -22,14 +22,18 @@ export const dataManager = {
 
   exportAllData() {
     const data = {
-      version: 1,
+      version: 2,
       exportDate: new Date().toISOString(),
       settings: state.settings,
       journal: state.journal.entries,
+      cashFlow: state.state.cashFlow,
       account: {
         realizedPnL: state.account.realizedPnL
       },
-      apiKey: localStorage.getItem('finnhubApiKey') || ''
+      apiKeys: {
+        finnhub: localStorage.getItem('finnhubApiKey') || '',
+        alphaVantage: localStorage.getItem('alphaVantageApiKey') || ''
+      }
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -73,22 +77,37 @@ export const dataManager = {
           state.state.journal.entries = data.journal || [];
           state.saveJournal();
 
+          // Restore cash flow (version 2+)
+          if (data.cashFlow) {
+            state.state.cashFlow = data.cashFlow;
+            state.saveCashFlow();
+          }
+
           // Restore account P&L
           if (data.account) {
             state.state.account.realizedPnL = data.account.realizedPnL || 0;
           }
 
-          // Restore API key
-          if (data.apiKey) {
+          // Restore API keys
+          if (data.apiKeys) {
+            if (data.apiKeys.finnhub) {
+              localStorage.setItem('finnhubApiKey', data.apiKeys.finnhub);
+            }
+            if (data.apiKeys.alphaVantage) {
+              localStorage.setItem('alphaVantageApiKey', data.apiKeys.alphaVantage);
+            }
+          } else if (data.apiKey) {
+            // Legacy support (version 1)
             localStorage.setItem('finnhubApiKey', data.apiKey);
           }
 
-          // Recalculate current account size
+          // Recalculate current account size including cash flow
+          const netCashFlow = (data.cashFlow?.totalDeposits || 0) - (data.cashFlow?.totalWithdrawals || 0);
           if (state.settings.dynamicAccountEnabled) {
             state.state.account.currentSize =
-              state.settings.startingAccountSize + state.account.realizedPnL;
+              state.settings.startingAccountSize + state.account.realizedPnL + netCashFlow;
           } else {
-            state.state.account.currentSize = state.settings.startingAccountSize;
+            state.state.account.currentSize = state.settings.startingAccountSize + netCashFlow;
           }
 
           // Refresh UI
@@ -118,21 +137,28 @@ export const dataManager = {
     localStorage.removeItem('riskCalcSettings');
     localStorage.removeItem('riskCalcJournal');
     localStorage.removeItem('riskCalcJournalMeta');
+    localStorage.removeItem('riskCalcCashFlow');
+    localStorage.removeItem('historicalPriceCache');
 
     // Reset state
-    const savedTheme = state.settings.theme; // Preserve theme
+    const savedTheme = state.settings.theme;
     state.state.settings = {
       startingAccountSize: 10000,
       defaultRiskPercent: 1,
       defaultMaxPositionPercent: 100,
       dynamicAccountEnabled: true,
-      theme: savedTheme // Keep theme
+      theme: savedTheme
     };
     state.state.account = {
       currentSize: 10000,
       realizedPnL: 0,
       riskPercent: 1,
       maxPositionPercent: 100
+    };
+    state.state.cashFlow = {
+      transactions: [],
+      totalDeposits: 0,
+      totalWithdrawals: 0
     };
     state.state.journal.entries = [];
 
@@ -161,6 +187,7 @@ export const dataManager = {
     state.saveSettings();
     state.saveJournal();
     state.saveJournalMeta();
+    state.saveCashFlow();
 
     // Refresh UI
     if (settingsModule) settingsModule.loadAndApply();

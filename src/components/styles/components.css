@@ -1688,6 +1688,166 @@
   color: var(--danger);
 }
 
+/* === Cash Flow Management === */
+
+.cash-flow-summary {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  background: var(--bg-base);
+  border-radius: var(--border-radius);
+}
+
+.cash-flow-summary__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.cash-flow-summary__label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+}
+
+.cash-flow-summary__value {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+.cash-flow-summary__breakdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.cash-flow-summary__breakdown > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cash-flow-summary__sublabel {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cash-flow-summary__subvalue {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.cash-flow-summary__subvalue--success {
+  color: var(--success);
+}
+
+.cash-flow-summary__subvalue--danger {
+  color: var(--danger);
+}
+
+.cash-flow-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.input-with-btn {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-end;
+}
+
+.input-with-btn .input-wrapper {
+  flex: 1;
+}
+
+.input-with-btn .btn {
+  flex-shrink: 0;
+  height: 42px;
+  padding: 0 var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.input-with-btn .btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.cash-flow-history {
+  margin-top: var(--space-4);
+}
+
+.cash-flow-history__title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.cash-flow-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cash-flow-transaction {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--text-sm);
+  animation: fadeInUp 0.2s ease-out;
+}
+
+.cash-flow-transaction__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cash-flow-transaction__type {
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+.cash-flow-transaction__type--deposit {
+  color: var(--success);
+}
+
+.cash-flow-transaction__type--withdrawal {
+  color: var(--danger);
+}
+
+.cash-flow-transaction__date {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.cash-flow-transaction__amount {
+  font-family: var(--font-mono);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.cash-flow-history__empty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 /* === Modal === */
 
 .modal-overlay {
