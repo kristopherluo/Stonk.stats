@@ -1398,43 +1398,37 @@
             Finnhub API Key
             <span class="tooltip">
               <span class="tooltip__icon">?</span>
-              <span class="tooltip__content">Get a free API key at finnhub.io. Used to fetch current stock prices for unrealized P&L tracking.</span>
+              <span class="tooltip__content">Get a free API key at <a href="https://finnhub.io/register" target="_blank" style="color: var(--color-primary);">finnhub.io</a>. Used to fetch current stock prices for unrealized P&L tracking. Stock prices auto-refresh every 1 minute on the Positions page. (60 API calls/minute on free tier)</span>
             </span>
           </label>
-          <input
-            type="text"
-            class="input input--mono"
-            id="finnhubApiKey"
-            placeholder="Paste your Finnhub API key here"
-          >
-          <span class="input-hint">
-            <a href="https://finnhub.io/register" target="_blank" style="color: var(--color-primary);">Sign up for free at finnhub.io</a> - 60 API calls/minute on free tier
-          </span>
-          <span class="input-hint" style="margin-top: var(--space-2); color: var(--text-success);">
-            ✓ Stock prices auto-refresh every 1 minute on the Positions page
-          </span>
+          <div class="input-with-btn">
+            <input
+              type="text"
+              class="input input--mono"
+              id="finnhubApiKey"
+              placeholder="Paste your Finnhub API key here"
+            >
+            <button class="btn btn--primary" id="finnhubApiKeyBtn">Use Key</button>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label class="label">
+        <div class="input-group">
+          <label class="input-label" for="twelveDataApiKey">
             Twelve Data API Key
             <span class="tooltip">
               <span class="tooltip__icon">?</span>
-              <span class="tooltip__content">Get a free API key at twelvedata.com. Used for historical price charts and company summaries in the Journal.</span>
+              <span class="tooltip__content">Get a free API key at <a href="https://twelvedata.com/pricing" target="_blank" style="color: var(--color-primary);">twelvedata.com</a>. Used for historical price charts and company summaries in the Journal. Enables chart viewing when opening journal entries. (800 calls/day on free tier)</span>
             </span>
           </label>
-          <input
-            type="text"
-            class="input input--mono"
-            id="twelveDataApiKey"
-            placeholder="Paste your Twelve Data API key here"
-          >
-          <span class="input-hint">
-            <a href="https://twelvedata.com/pricing" target="_blank" style="color: var(--color-primary);">Get free API key at twelvedata.com</a> - 800 calls/day on free tier
-          </span>
-          <span class="input-hint" style="margin-top: var(--space-2); color: var(--text-success);">
-            ✓ Enables historical price charts and company summaries in journal entries
-          </span>
+          <div class="input-with-btn">
+            <input
+              type="text"
+              class="input input--mono"
+              id="twelveDataApiKey"
+              placeholder="Paste your Twelve Data API key here"
+            >
+            <button class="btn btn--primary" id="twelveDataApiKeyBtn">Use Key</button>
+          </div>
         </div>
       </div>
 

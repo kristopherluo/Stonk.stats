@@ -73,7 +73,9 @@ class Settings {
 
       // Price tracking
       finnhubApiKey: document.getElementById('finnhubApiKey'),
+      finnhubApiKeyBtn: document.getElementById('finnhubApiKeyBtn'),
       twelveDataApiKey: document.getElementById('twelveDataApiKey'),
+      twelveDataApiKeyBtn: document.getElementById('twelveDataApiKeyBtn'),
 
       // Journal settings
       wizardEnabledToggle: document.getElementById('wizardEnabledToggle'),
@@ -213,7 +215,7 @@ class Settings {
     }
 
     // Finnhub API Key
-    if (this.elements.finnhubApiKey) {
+    if (this.elements.finnhubApiKey && this.elements.finnhubApiKeyBtn) {
       const saveApiKey = (apiKey) => {
         priceTracker.setApiKey(apiKey);
         if (apiKey) {
@@ -221,23 +223,25 @@ class Settings {
         }
       };
 
-      this.elements.finnhubApiKey.addEventListener('blur', (e) => {
-        const apiKey = e.target.value.trim();
+      // Button click handler
+      this.elements.finnhubApiKeyBtn.addEventListener('click', () => {
+        const apiKey = this.elements.finnhubApiKey.value.trim();
         saveApiKey(apiKey);
       });
 
+      // Enter key handler
       this.elements.finnhubApiKey.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
           const apiKey = e.target.value.trim();
           saveApiKey(apiKey);
-          e.target.blur();
+          this.elements.finnhubApiKeyBtn.focus();
         }
       });
     }
 
     // Twelve Data API Key
-    if (this.elements.twelveDataApiKey) {
+    if (this.elements.twelveDataApiKey && this.elements.twelveDataApiKeyBtn) {
       const saveTwelveDataKey = (apiKey) => {
         localStorage.setItem('twelveDataApiKey', apiKey);
         if (apiKey) {
@@ -245,17 +249,19 @@ class Settings {
         }
       };
 
-      this.elements.twelveDataApiKey.addEventListener('blur', (e) => {
-        const apiKey = e.target.value.trim();
+      // Button click handler
+      this.elements.twelveDataApiKeyBtn.addEventListener('click', () => {
+        const apiKey = this.elements.twelveDataApiKey.value.trim();
         saveTwelveDataKey(apiKey);
       });
 
+      // Enter key handler
       this.elements.twelveDataApiKey.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
           const apiKey = e.target.value.trim();
           saveTwelveDataKey(apiKey);
-          e.target.blur();
+          this.elements.twelveDataApiKeyBtn.focus();
         }
       });
     }
@@ -632,7 +638,7 @@ class Settings {
     const transactions = state.state.cashFlow.transactions;
 
     if (transactions.length === 0) {
-      this.elements.cashFlowHistory.innerHTML = '<div class="cash-flow-history__empty">No deposits or withdrawals yet</div>';
+      this.elements.cashFlowHistory.innerHTML = '';
       return;
     }
 

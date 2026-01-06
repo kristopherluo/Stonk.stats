@@ -1756,7 +1756,7 @@
 .cash-flow-actions {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-2);
 }
 
 .input-with-btn {
@@ -1839,13 +1839,6 @@
   font-family: var(--font-mono);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-}
-
-.cash-flow-history__empty {
-  padding: var(--space-4);
-  text-align: center;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
 }
 
 /* === Modal === */
