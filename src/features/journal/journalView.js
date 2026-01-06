@@ -1346,18 +1346,17 @@ class JournalView {
         // Trim whitespace from summary
         const cleanSummary = overview.summary.trim();
 
-        // Update the trade with the company info
-        const companyData = {
-          name: overview.name,
-          sector: overview.sector,
-          industry: overview.industry,
-          summary: cleanSummary
-        };
-
-        // Update silently without triggering re-render
+        // Only add summary to existing company data, don't overwrite industry
+        // Industry should come from Finnhub (when position was created)
         const tradeIndex = state.journal.entries.findIndex(t => t.id === trade.id);
         if (tradeIndex !== -1) {
-          state.journal.entries[tradeIndex].company = companyData;
+          const existingCompany = state.journal.entries[tradeIndex].company || {};
+
+          // Preserve existing industry from Finnhub, only add summary
+          state.journal.entries[tradeIndex].company = {
+            ...existingCompany,
+            summary: cleanSummary
+          };
           state.saveJournal();
         }
 

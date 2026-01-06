@@ -103,10 +103,70 @@ export const priceTracker = {
    * Fetch company profile from Finnhub API
    * Returns: { name, industry, country }
    */
+  // Helper to convert text to title case
+  toTitleCase(str) {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  },
+
+  // Get cached company data
+  getCachedCompanyData(ticker) {
+    try {
+      const cache = localStorage.getItem('companyDataCache');
+      if (!cache) return null;
+
+      const parsed = JSON.parse(cache);
+      const data = parsed[ticker.toUpperCase()];
+
+      if (data && data.cachedAt) {
+        // Cache expires after 30 days
+        const age = Date.now() - data.cachedAt;
+        const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+
+        if (age < thirtyDays) {
+          console.log(`[Company Profile] Using cached data for ${ticker}`);
+          return data;
+        }
+      }
+
+      return null;
+    } catch (e) {
+      console.error('Error reading company data cache:', e);
+      return null;
+    }
+  },
+
+  // Save company data to cache
+  saveCompanyDataToCache(ticker, data) {
+    try {
+      const cache = localStorage.getItem('companyDataCache');
+      const parsed = cache ? JSON.parse(cache) : {};
+
+      parsed[ticker.toUpperCase()] = {
+        ...data,
+        cachedAt: Date.now()
+      };
+
+      localStorage.setItem('companyDataCache', JSON.stringify(parsed));
+    } catch (e) {
+      console.error('Error saving company data cache:', e);
+    }
+  },
+
   async fetchCompanyProfile(ticker) {
     if (!this.apiKey) {
       console.log('[Company Profile] No API key configured');
       return null; // Silently return null if no API key
+    }
+
+    // Check cache first
+    const cached = this.getCachedCompanyData(ticker);
+    if (cached) {
+      return cached;
     }
 
     try {
@@ -130,14 +190,19 @@ export const priceTracker = {
       }
 
       // Finnhub returns: name, finnhubIndustry, country, etc.
+      // Normalize industry to title case
       const profile = {
         ticker: ticker.toUpperCase(),
         name: data.name || '',
-        industry: data.finnhubIndustry || '',
+        industry: this.toTitleCase(data.finnhubIndustry || ''),
         country: data.country || ''
       };
 
       console.log(`[Company Profile] ✅ Successfully fetched profile for ${ticker}:`, profile);
+
+      // Cache the data
+      this.saveCompanyDataToCache(ticker, profile);
+
       return profile;
     } catch (error) {
       console.error(`[Company Profile] ❌ Failed to fetch profile for ${ticker}:`, error);
