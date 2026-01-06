@@ -390,6 +390,7 @@ class PositionsView {
 
     if (this.elements.openRisk) {
       this.elements.openRisk.textContent = `${formatCurrency(totalRisk)} (${formatPercent(riskPercent)})`;
+      this.elements.openRisk.className = 'positions-risk-bar__value text-danger';
     }
 
     // Update Open P&L
@@ -444,46 +445,74 @@ class PositionsView {
       const companyName = trade.company?.name;
       const industry = trade.company?.industry;
 
+      // Determine target and label
+      const originalStop = trade.originalStop ?? trade.stop;
+      const riskAmount = trade.entry - originalStop;
+
+      // Use trade.target if set, otherwise default to 5R
+      const targetPrice = trade.target || (trade.entry + (riskAmount * 5));
+
+      // Calculate which R-multiple this target represents (if any)
+      let targetLabel = 'Target';
+      for (let r = 1; r <= 5; r++) {
+        const rTarget = trade.entry + (riskAmount * r);
+        if (Math.abs(targetPrice - rTarget) < 0.01) { // Within 1 cent
+          targetLabel = `${r}R Target`;
+          break;
+        }
+      }
+
       return `
         <div class="position-card ${shouldAnimate ? 'position-card--animate' : ''} ${isTrimmed ? 'position-card--trimmed' : ''}" data-id="${trade.id}">
-          <div class="position-card__header">
-            <div class="position-card__header-left">
+          <div class="position-card__header" style="flex-direction: column; align-items: flex-start;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: var(--space-1);">
               <span class="position-card__ticker">${trade.ticker}</span>
+              <div class="position-card__badges" style="flex-wrap: nowrap;">
+                ${industry ? `<span class="position-card__badge position-card__badge--industry">${industry}</span>` : ''}
+                ${setupType ? `<span class="position-card__badge position-card__badge--type">${setupType.replace(/\b\w/g, l => l.toUpperCase())}</span>` : ''}
+                <span class="position-card__badge position-card__badge--${statusClass}">
+                  ${statusText}
+                </span>
+              </div>
             </div>
-            <div class="position-card__badges">
-              ${industry ? `<span class="position-card__badge position-card__badge--industry">${industry}</span>` : ''}
-              ${setupType ? `<span class="position-card__badge position-card__badge--type">${setupType.replace(/\b\w/g, l => l.toUpperCase())}</span>` : ''}
-              <span class="position-card__badge position-card__badge--${statusClass}">
-                ${statusText}
-              </span>
-            </div>
+            <span class="position-card__shares">${isTrimmed ? `${shares} of ${trade.originalShares}` : shares} shares</span>
           </div>
 
           <div class="position-card__details">
             <div class="position-card__detail">
-              <span class="position-card__detail-label">Shares</span>
-              <span class="position-card__detail-value">${shares}${isTrimmed ? ` / ${trade.originalShares}` : ''}</span>
-            </div>
-            <div class="position-card__detail">
               <span class="position-card__detail-label">Entry</span>
-              <span class="position-card__detail-value">${formatCurrency(trade.entry)}</span>
+              <span class="position-card__detail-value" style="color: var(--primary);">${formatCurrency(trade.entry)}</span>
             </div>
-            ${pnlData ? `
-            <div class="position-card__detail">
-              <span class="position-card__detail-label">Current</span>
-              <span class="position-card__detail-value ${pnlData.unrealizedPnL >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(pnlData.currentPrice)}</span>
-            </div>
-            ` : ''}
             <div class="position-card__detail">
               <span class="position-card__detail-label">Stop</span>
-              <span class="position-card__detail-value">${formatCurrency(trade.stop)}</span>
+              <span class="position-card__detail-value" style="color: var(--danger);">${formatCurrency(trade.stop)}</span>
             </div>
-            ${trade.target ? `
+            ${pnlData && pnlData.currentPrice >= (targetPrice * 0.95) ? `
             <div class="position-card__detail">
-              <span class="position-card__detail-label">Target</span>
-              <span class="position-card__detail-value">${formatCurrency(trade.target)}</span>
+              <span class="position-card__detail-label">Current</span>
             </div>
-            ` : ''}
+            <div class="position-card__detail">
+              <span class="position-card__detail-label">${targetLabel}</span>
+            </div>
+            <div style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); outline: 2px solid var(--warning); outline-offset: 2px; border-radius: 4px; padding: 2px 4px; margin-top: -6px;">
+              <span class="position-card__detail-value" style="color: var(--warning);">${formatCurrency(pnlData.currentPrice)} <span style="font-size: var(--text-xs); color: var(--text-muted); font-weight: normal;">${pnlData.currentPrice >= targetPrice ? 'target reached' : 'nearing target'}</span></span>
+              <span class="position-card__detail-value" style="color: var(--warning);">${formatCurrency(targetPrice)}</span>
+            </div>
+            ` : pnlData ? `
+            <div class="position-card__detail">
+              <span class="position-card__detail-label">Current</span>
+              <span class="position-card__detail-value">${formatCurrency(pnlData.currentPrice)}</span>
+            </div>
+            <div class="position-card__detail">
+              <span class="position-card__detail-label">${targetLabel}</span>
+              <span class="position-card__detail-value" style="color: var(--warning);">${formatCurrency(targetPrice)}</span>
+            </div>
+            ` : `
+            <div class="position-card__detail">
+              <span class="position-card__detail-label">${targetLabel}</span>
+              <span class="position-card__detail-value" style="color: var(--warning);">${formatCurrency(targetPrice)}</span>
+            </div>
+            `}
           </div>
 
           <div class="position-card__risk">

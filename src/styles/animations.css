@@ -401,20 +401,27 @@
 
 /* === Trade Card Animations === */
 
-@keyframes tradeCardIn {
+@keyframes cardDealIn {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translate(-50px, -30px) rotate(-8deg) scale(0.8);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate(0, 0) rotate(0deg) scale(1);
   }
 }
 
-.trade-card {
-  animation: tradeCardIn 0.3s ease-out;
+.trade-card--animate {
+  animation: cardDealIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
 }
+
+/* Staggered card animations for dashboard active trades (max 5 cards) */
+.trade-card--animate:nth-child(1) { animation-delay: 0ms; }
+.trade-card--animate:nth-child(2) { animation-delay: 80ms; }
+.trade-card--animate:nth-child(3) { animation-delay: 160ms; }
+.trade-card--animate:nth-child(4) { animation-delay: 240ms; }
+.trade-card--animate:nth-child(5) { animation-delay: 320ms; }
 
 .trade-card.removing {
   animation: slideOutRight 0.3s ease-in forwards;
@@ -605,8 +612,16 @@ a:hover::after {
   }
 
   /* Simpler trade card animation */
-  .trade-card {
-    animation: fadeIn 0.2s ease-out;
+  .trade-card--animate {
+    animation: fadeIn 0.3s ease-out backwards;
+  }
+
+  .trade-card--animate:nth-child(1),
+  .trade-card--animate:nth-child(2),
+  .trade-card--animate:nth-child(3),
+  .trade-card--animate:nth-child(4),
+  .trade-card--animate:nth-child(5) {
+    animation-delay: 0ms;
   }
 }
 

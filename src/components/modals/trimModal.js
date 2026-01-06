@@ -44,6 +44,7 @@ class TrimModal {
       totalPnL: document.getElementById('trimTotalPnL'),
       preview: document.getElementById('trimPreview'),
       onlyMoveStopCheckbox: document.getElementById('onlyMoveStopCheckbox'),
+      onlyChangeTargetCheckbox: document.getElementById('onlyChangeTargetCheckbox'),
       newStopOptional: document.getElementById('newStopOptional'),
       editPositionDetailsBtn: document.getElementById('editPositionDetailsBtn'),
       entryPriceInput: document.getElementById('trimEntryPriceInput'),
@@ -80,6 +81,11 @@ class TrimModal {
 
     // Shares display is inside trim percentage section
     this.sections.sharesDisplay = this.elements.modal?.querySelector('.trim-shares-display');
+
+    // Find section containing new stop
+    this.sections.newStop = trimSections.find(section =>
+      section.querySelector('#trimNewStop')
+    );
   }
 
   bindEvents() {
@@ -103,6 +109,7 @@ class TrimModal {
     this.elements.exitPrice?.addEventListener('input', () => this.handleManualExitPrice());
     this.elements.confirmBtn?.addEventListener('click', () => this.confirm());
     this.elements.onlyMoveStopCheckbox?.addEventListener('change', () => this.handleOnlyMoveStopToggle());
+    this.elements.onlyChangeTargetCheckbox?.addEventListener('change', () => this.handleOnlyChangeTargetToggle());
     this.elements.editPositionDetailsBtn?.addEventListener('click', () => this.handleEditPositionDetailsToggle());
   }
 
@@ -139,6 +146,11 @@ class TrimModal {
     // Reset "Only move stop" checkbox
     if (this.elements.onlyMoveStopCheckbox) {
       this.elements.onlyMoveStopCheckbox.checked = false;
+    }
+
+    // Reset "Only change target" checkbox
+    if (this.elements.onlyChangeTargetCheckbox) {
+      this.elements.onlyChangeTargetCheckbox.checked = false;
     }
 
     // Reset edit mode
@@ -359,6 +371,36 @@ class TrimModal {
       if (this.elements.newStopOptional) {
         this.elements.newStopOptional.style.display = '';
       }
+    }
+  }
+
+  handleOnlyChangeTargetToggle() {
+    const isChecked = this.elements.onlyChangeTargetCheckbox?.checked;
+
+    if (isChecked) {
+      // Hide trim percentage, close date, new stop, shares display, and P&L preview
+      // Keep R-multiple and exit price visible for target selection
+      if (this.sections.trimPercent) {
+        this.sections.trimPercent.style.display = 'none';
+      }
+      if (this.sections.closeDate) {
+        this.sections.closeDate.style.display = 'none';
+      }
+      if (this.sections.newStop) {
+        this.sections.newStop.style.display = 'none';
+      }
+      if (this.elements.preview) {
+        this.elements.preview.style.display = 'none';
+      }
+
+      // Update button text
+      if (this.elements.confirmBtn) {
+        this.elements.confirmBtn.textContent = 'Confirm Target Change';
+      }
+    } else {
+      this.showAllSections();
+      // Recalculate preview to restore button text
+      this.calculatePreview();
     }
   }
 
@@ -598,6 +640,28 @@ class TrimModal {
 
       state.updateJournalEntry(this.currentTrade.id, updates);
       showToast(`✅ ${this.currentTrade.ticker} stop moved to ${formatCurrency(newStopValue)}`, 'success');
+      this.close();
+      return;
+    }
+
+    // Check if "Only change target" mode is active
+    const isOnlyChangeTarget = this.elements.onlyChangeTargetCheckbox?.checked;
+
+    if (isOnlyChangeTarget) {
+      // Only change target mode - update target without closing shares
+      const exitPrice = parseFloat(this.elements.exitPrice?.value);
+      if (isNaN(exitPrice) || exitPrice <= 0) {
+        showToast('⚠️ Enter a target price', 'error');
+        return;
+      }
+
+      // Update only the target
+      const updates = {
+        target: exitPrice
+      };
+
+      state.updateJournalEntry(this.currentTrade.id, updates);
+      showToast(`✅ ${this.currentTrade.ticker} target updated to ${formatCurrency(exitPrice)}`, 'success');
       this.close();
       return;
     }

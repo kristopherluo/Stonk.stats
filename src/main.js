@@ -39,6 +39,9 @@ class App {
     // Initialize price tracker
     priceTracker.init();
 
+    // Update account display after price cache is loaded
+    settings.updateAccountDisplay(state.account.currentSize);
+
     // Initialize theme after settings are loaded (so it doesn't overwrite saved settings)
     theme.init();
 

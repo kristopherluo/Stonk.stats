@@ -274,6 +274,10 @@
   color: var(--primary);
 }
 
+.position-card__shares {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
 
 .position-card__details {
   display: grid;

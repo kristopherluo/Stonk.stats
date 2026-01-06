@@ -15,6 +15,7 @@ import { priceTracker } from '../../core/priceTracker.js';
 class Journal {
   constructor() {
     this.elements = {};
+    this.hasAnimated = false;
   }
 
   init() {
@@ -42,6 +43,13 @@ class Journal {
 
     // Initial wizard hint state
     this.updateWizardHint();
+
+    // Listen for view changes to reset animation
+    state.on('viewChanged', (data) => {
+      if (data.to === 'dashboard') {
+        this.hasAnimated = false;
+      }
+    });
   }
 
   cacheElements() {
@@ -318,6 +326,9 @@ class Journal {
       return;
     }
 
+    const shouldAnimate = !this.hasAnimated;
+    this.hasAnimated = true;
+
     this.elements.activeTrades.innerHTML = activeTrades.slice(0, 5).map(trade => {
       const shares = trade.remainingShares ?? trade.shares;
       const riskPerShare = trade.entry - trade.stop;
@@ -359,7 +370,7 @@ class Journal {
       }
 
       return `
-        <div class="trade-card" data-id="${trade.id}">
+        <div class="trade-card ${shouldAnimate ? 'trade-card--animate' : ''}" data-id="${trade.id}">
           <div class="trade-card__header">
             <div class="trade-card__header-left">
               <span class="trade-card__ticker">${trade.ticker}</span>
@@ -382,7 +393,7 @@ class Journal {
             </div>
             <div class="trade-card__detail">
               <span class="trade-card__label">Risk</span>
-              <span class="trade-card__value ${riskColorClass}">${riskPercent.toFixed(2)}% (${formatCurrency(netRisk)})</span>
+              <span class="trade-card__value text-danger">${formatCurrency(netRisk)}</span>
             </div>
             ${isTrimmed ? `
             <div class="trade-card__detail">
@@ -436,8 +447,7 @@ class Journal {
 
     this.elements.riskSummary.innerHTML = `
       <span class="risk-summary__label">Open Risk:</span>
-      <span class="risk-summary__value">${formatCurrency(totalRisk)}</span>
-      <span class="risk-summary__percent">(${formatPercent(riskPercent)})</span>
+      <span class="risk-summary__value" style="color: var(--danger);">${formatCurrency(totalRisk)}</span>
       <span class="risk-summary__indicator risk-summary__indicator--${level}">${level.toUpperCase()}</span>
     `;
   }
