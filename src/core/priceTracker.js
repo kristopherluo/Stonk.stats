@@ -209,17 +209,52 @@ export const priceTracker = {
   },
 
   /**
-   * Fetch company summary/description from Twelve Data API
+   * Fetch company summary/description from Alpha Vantage
    * Returns: { summary: string, name: string, sector: string, industry: string }
    */
   async fetchCompanySummary(ticker) {
-    const twelveDataKey = localStorage.getItem('twelveDataApiKey');
-    if (!twelveDataKey) {
-      throw new Error('Twelve Data API key not configured. Add it in Settings to fetch company summaries.');
+    const alphaVantageKey = localStorage.getItem('alphaVantageApiKey');
+
+    if (!alphaVantageKey) {
+      throw new Error('Alpha Vantage API key not configured. Add it in Settings to fetch company summaries.');
     }
 
-    console.log(`[Company Summary] Using Twelve Data for ${ticker}`);
-    return await this.fetchCompanySummaryFromTwelveData(ticker, twelveDataKey);
+    console.log(`[Company Summary] Using Alpha Vantage for ${ticker}`);
+    return await this.fetchCompanySummaryFromAlphaVantage(ticker, alphaVantageKey);
+  },
+
+  async fetchCompanySummaryFromAlphaVantage(ticker, apiKey) {
+    const url = `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${ticker.toUpperCase()}&apikey=${apiKey}`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch company overview from Alpha Vantage (${response.status})`);
+    }
+
+    const data = await response.json();
+
+    // Check for API errors
+    if (data.Note) {
+      throw new Error('Alpha Vantage API rate limit reached. Free tier: 25 calls/day, 5 calls/minute.');
+    }
+
+    if (data['Error Message']) {
+      throw new Error('Invalid ticker or no data available from Alpha Vantage');
+    }
+
+    if (!data.Name) {
+      throw new Error('No company overview data available from Alpha Vantage');
+    }
+
+    // Alpha Vantage returns: Name, Description, Sector, Industry, etc.
+    return {
+      ticker: ticker.toUpperCase(),
+      name: data.Name || '',
+      sector: data.Sector || '',
+      industry: data.Industry || '',
+      summary: data.Description || ''
+    };
   },
 
   async fetchCompanySummaryFromTwelveData(ticker, apiKey) {

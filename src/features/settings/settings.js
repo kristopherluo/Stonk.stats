@@ -76,6 +76,8 @@ class Settings {
       finnhubApiKeyBtn: document.getElementById('finnhubApiKeyBtn'),
       twelveDataApiKey: document.getElementById('twelveDataApiKey'),
       twelveDataApiKeyBtn: document.getElementById('twelveDataApiKeyBtn'),
+      alphaVantageApiKey: document.getElementById('alphaVantageApiKey'),
+      alphaVantageApiKeyBtn: document.getElementById('alphaVantageApiKeyBtn'),
 
       // Journal settings
       wizardEnabledToggle: document.getElementById('wizardEnabledToggle'),
@@ -245,7 +247,7 @@ class Settings {
       const saveTwelveDataKey = (apiKey) => {
         localStorage.setItem('twelveDataApiKey', apiKey);
         if (apiKey) {
-          showToast('✅ Twelve Data API key saved - 800 calls/day for charts & company summaries!', 'success');
+          showToast('✅ Twelve Data API key saved - 800 calls/day for charts!', 'success');
         }
       };
 
@@ -262,6 +264,32 @@ class Settings {
           const apiKey = e.target.value.trim();
           saveTwelveDataKey(apiKey);
           this.elements.twelveDataApiKeyBtn.focus();
+        }
+      });
+    }
+
+    // Alpha Vantage API Key
+    if (this.elements.alphaVantageApiKey && this.elements.alphaVantageApiKeyBtn) {
+      const saveAlphaVantageKey = (apiKey) => {
+        localStorage.setItem('alphaVantageApiKey', apiKey);
+        if (apiKey) {
+          showToast('✅ Alpha Vantage API key saved - 25 calls/day for company descriptions!', 'success');
+        }
+      };
+
+      // Button click handler
+      this.elements.alphaVantageApiKeyBtn.addEventListener('click', () => {
+        const apiKey = this.elements.alphaVantageApiKey.value.trim();
+        saveAlphaVantageKey(apiKey);
+      });
+
+      // Enter key handler
+      this.elements.alphaVantageApiKey.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const apiKey = e.target.value.trim();
+          saveAlphaVantageKey(apiKey);
+          this.elements.alphaVantageApiKeyBtn.focus();
         }
       });
     }
@@ -460,6 +488,11 @@ class Settings {
     const twelveDataKey = localStorage.getItem('twelveDataApiKey') || '';
     if (this.elements.twelveDataApiKey) {
       this.elements.twelveDataApiKey.value = twelveDataKey;
+    }
+
+    const alphaVantageKey = localStorage.getItem('alphaVantageApiKey') || '';
+    if (this.elements.alphaVantageApiKey) {
+      this.elements.alphaVantageApiKey.value = alphaVantageKey;
     }
 
     // Update header

@@ -716,6 +716,16 @@ class JournalView {
         }
       }
 
+      // Calculate position size as % of account
+      let positionPercent = null;
+      if (trade.status === 'open' || trade.status === 'trimmed') {
+        const accountSize = state.account.currentSize;
+        const positionValue = shares * trade.entry;
+        if (accountSize > 0) {
+          positionPercent = (positionValue / accountSize) * 100;
+        }
+      }
+
       // Check if trade is "free rolled" - realized profit covers remaining risk
       const isTrimmed = trade.status === 'trimmed';
       const realizedPnL = trade.totalRealizedPnL || 0;
@@ -751,6 +761,7 @@ class JournalView {
           <td>${formatCurrency(trade.entry)}</td>
           <td>${trade.exitPrice ? formatCurrency(trade.exitPrice) : '—'}</td>
           <td>${sharesDisplay}</td>
+          <td>${positionPercent !== null ? `${positionPercent.toFixed(2)}%` : '—'}</td>
           <td class="${hasPnL ? (pnl >= 0 ? 'journal-table__pnl--positive' : 'journal-table__pnl--negative') : ''}">
             ${hasPnL ? `${pnl >= 0 ? '+' : ''}${formatCurrency(pnl)}` : '—'}
           </td>
@@ -767,7 +778,7 @@ class JournalView {
           </td>
         </tr>
         <tr class="journal-table__row-details ${isExpanded ? 'expanded' : ''}" data-details-id="${trade.id}">
-          <td colspan="9">
+          <td colspan="10">
             ${this.renderRowDetails(trade)}
           </td>
         </tr>
@@ -796,7 +807,7 @@ class JournalView {
           <div class="journal-info-box">
             <div class="journal-info-box__section" data-company-summary-section="${trade.id}">
               <div class="journal-info-box__label">Company Summary</div>
-              <div class="journal-info-box__content" data-company-summary="${trade.id}">${trade.company?.summary || 'Loading company information...'}</div>
+              <div class="journal-info-box__content" data-company-summary="${trade.id}">${trade.company?.summary || trade.company?.description || 'Loading company information...'}</div>
             </div>
             <div class="journal-info-box__section">
               <div class="journal-info-box__label">Notes</div>
@@ -1318,8 +1329,8 @@ class JournalView {
   }
 
   async fetchAndDisplayCompanySummary(trade) {
-    // If summary already exists, no need to fetch
-    if (trade.company?.summary) {
+    // If summary or description already exists, no need to fetch
+    if (trade.company?.summary || trade.company?.description) {
       return;
     }
 
@@ -1378,17 +1389,37 @@ class JournalView {
         summaryContainer.style.color = '';
         console.log(`Successfully fetched and saved company summary for ${trade.ticker}`);
       } else {
-        // No summary available - hide the company summary section
-        console.log(`No company summary available for ${trade.ticker}`);
-        if (summarySection) {
-          summarySection.style.display = 'none';
+        // No description available - show company info we do have
+        console.log(`No company description available for ${trade.ticker}`);
+        const companyInfo = [];
+        if (trade.company?.name) companyInfo.push(trade.company.name);
+        if (trade.company?.industry) companyInfo.push(trade.company.industry);
+
+        if (companyInfo.length > 0) {
+          summaryContainer.textContent = companyInfo.join(' • ');
+          summaryContainer.style.fontStyle = 'normal';
+          summaryContainer.style.color = '';
+        } else {
+          summaryContainer.textContent = 'No company information available';
+          summaryContainer.style.fontStyle = 'italic';
+          summaryContainer.style.color = 'var(--text-muted)';
         }
       }
     } catch (error) {
       console.error('Error fetching company summary:', error);
-      // Hide on error
-      if (summarySection) {
-        summarySection.style.display = 'none';
+      // Show company info we have instead of hiding on error
+      const companyInfo = [];
+      if (trade.company?.name) companyInfo.push(trade.company.name);
+      if (trade.company?.industry) companyInfo.push(trade.company.industry);
+
+      if (companyInfo.length > 0) {
+        summaryContainer.textContent = companyInfo.join(' • ');
+        summaryContainer.style.fontStyle = 'normal';
+        summaryContainer.style.color = '';
+      } else {
+        summaryContainer.textContent = 'Company information unavailable';
+        summaryContainer.style.fontStyle = 'italic';
+        summaryContainer.style.color = 'var(--text-muted)';
       }
     }
   }
