@@ -6,10 +6,10 @@
   /* === Colors === */
 
   /* Background layers */
-  --bg-base: #0a0e14;
-  --bg-surface: #131920;
-  --bg-elevated: #1a2230;
-  --bg-hover: #222d3d;
+  --bg-base: #000000;
+  --bg-surface: #0a0a0a;
+  --bg-elevated: #121212;
+  --bg-hover: #1a1a1a;
 
   /* Borders */
   --border-subtle: #2a3545;
@@ -46,9 +46,9 @@
 
   /* === Typography === */
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --font-sans: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Rajdhani', 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 
   /* Font sizes */
   --text-xs: 0.75rem;     /* 12px */

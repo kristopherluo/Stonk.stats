@@ -318,7 +318,7 @@ class PositionsView {
 
     // Update count to show filtered positions
     if (this.elements.positionsCount) {
-      this.elements.positionsCount.textContent = `${positions.length} position${positions.length !== 1 ? 's' : ''}`;
+      this.elements.positionsCount.textContent = `Active: ${positions.length}`;
     }
 
     // Render risk bar with filtered positions
@@ -531,7 +531,7 @@ class PositionsView {
               <span class="position-card__risk-value">${formatCurrency(netRisk)} (${formatPercent(riskPercent)})</span>
             </div>
             ${pnlData ? `
-            <div class="position-card__risk-row">
+            <div class="position-card__risk-row position-card__unrealized">
               <span class="position-card__risk-label">Unrealized P&L</span>
               <span class="position-card__risk-value ${pnlData.unrealizedPnL >= 0 ? 'text-success' : 'text-danger'}">${pnlData.unrealizedPnL >= 0 ? '+' : ''}${formatCurrency(pnlData.unrealizedPnL)} (${pnlData.unrealizedPercent >= 0 ? '+' : ''}${formatPercent(pnlData.unrealizedPercent)})</span>
             </div>
@@ -543,15 +543,6 @@ class PositionsView {
             </div>
             ` : ''}
           </div>
-
-          <div class="position-card__actions">
-            <button class="position-card__btn position-card__btn--primary" data-action="close" data-id="${trade.id}">
-              Manage
-            </button>
-            <button class="position-card__btn position-card__btn--danger" data-action="delete" data-id="${trade.id}">
-              Delete
-            </button>
-          </div>
         </div>
       `;
     }).join('');
@@ -561,21 +552,12 @@ class PositionsView {
   }
 
   bindCardActions() {
-    // Close/Trim buttons
-    this.elements.grid.querySelectorAll('[data-action="close"]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = parseInt(e.target.dataset.id);
+    // Make entire card clickable to open manage modal
+    this.elements.grid.querySelectorAll('.position-card').forEach(card => {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', (e) => {
+        const id = parseInt(card.dataset.id);
         trimModal.open(id);
-      });
-    });
-
-    // Delete buttons
-    this.elements.grid.querySelectorAll('[data-action="delete"]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = parseInt(e.target.dataset.id);
-        if (confirm('Delete this trade?')) {
-          state.deleteJournalEntry(id);
-        }
       });
     });
   }

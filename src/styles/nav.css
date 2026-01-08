@@ -81,8 +81,10 @@
 /* === Text Label === */
 
 .view-nav__text {
-  font-weight: var(--font-semibold);
-  letter-spacing: -0.01em;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 6px rgba(96, 165, 250, 0.2);
 }
 
 /* === Keyboard Shortcut Indicator === */
