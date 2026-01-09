@@ -5,6 +5,7 @@
 import { state } from '../../core/state.js';
 import { priceTracker } from '../../core/priceTracker.js';
 import { historicalPrices } from '../../core/historicalPrices.js';
+import { showToast } from '../../components/ui/ui.js';
 
 class Stats {
   constructor() {
@@ -40,6 +41,7 @@ class Stats {
 
       // Chart
       chartValue: document.getElementById('statChartValue'),
+      chartLoading: document.getElementById('equityChartLoading'),
 
       // Filter elements
       dateRange: document.getElementById('statsDateRange'),
@@ -197,7 +199,7 @@ class Stats {
     if (!this.filters.dateFrom || !this.filters.dateTo) return null;
 
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = this.formatDateLocal(today);
 
     // Check if dateTo is today
     if (this.filters.dateTo !== todayStr) return null;
@@ -237,8 +239,9 @@ class Stats {
       const fromDate = new Date(today);
       fromDate.setDate(today.getDate() - daysBack);
 
-      const fromStr = fromDate.toISOString().split('T')[0];
-      const toStr = today.toISOString().split('T')[0];
+      // Format dates in local timezone (not UTC) to avoid off-by-one errors
+      const fromStr = this.formatDateLocal(fromDate);
+      const toStr = this.formatDateLocal(today);
 
       if (this.elements.dateFrom) {
         this.elements.dateFrom.value = fromStr;
@@ -251,10 +254,31 @@ class Stats {
     }
   }
 
+  formatDateLocal(date) {
+    // Format date as YYYY-MM-DD in local timezone
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   applyFilters() {
     // Get values from UI
-    const dateFrom = this.elements.dateFrom?.value || null;
-    const dateTo = this.elements.dateTo?.value || null;
+    let dateFrom = this.elements.dateFrom?.value || null;
+    let dateTo = this.elements.dateTo?.value || null;
+
+    // Prevent future dates
+    const today = this.formatDateLocal(new Date());
+    if (dateFrom && dateFrom > today) {
+      showToast('⚠️ Cannot select future dates', 'warning');
+      dateFrom = today;
+      if (this.elements.dateFrom) this.elements.dateFrom.value = today;
+    }
+    if (dateTo && dateTo > today) {
+      showToast('⚠️ Cannot select future dates', 'warning');
+      dateTo = today;
+      if (this.elements.dateTo) this.elements.dateTo.value = today;
+    }
 
     // Update filter state
     this.filters.dateFrom = dateFrom;
@@ -309,7 +333,7 @@ class Stats {
     if (this.filters.dateFrom || this.filters.dateTo) {
       filtered = filtered.filter(trade => {
         const tradeDate = new Date(trade.timestamp);
-        const tradeDateOnly = tradeDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        const tradeDateOnly = this.formatDateLocal(tradeDate);
 
         let inRange = true;
 
@@ -428,7 +452,7 @@ class Stats {
       this.elements.openPositions.textContent = s.openPositions;
     }
     if (this.elements.openRisk) {
-      this.elements.openRisk.textContent = `$${this.formatNumber(s.openRiskTotal)} at risk`;
+      this.elements.openRisk.innerHTML = `<span class="stat-card__sub--danger">$${this.formatNumber(s.openRiskTotal)}</span> at risk`;
     }
 
     // Total P&L
@@ -517,7 +541,7 @@ class Stats {
     if (this.filters.dateFrom || this.filters.dateTo) {
       // Check if it matches a preset first
       const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
+      const todayStr = this.formatDateLocal(today);
 
       if (this.filters.dateFrom && this.filters.dateTo === todayStr) {
         const fromDate = new Date(this.filters.dateFrom);
@@ -544,7 +568,9 @@ class Stats {
 
   formatCustomDateRange() {
     const formatDate = (dateStr) => {
-      const date = new Date(dateStr);
+      // Parse YYYY-MM-DD string manually to avoid UTC timezone issues
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const date = new Date(year, month - 1, day); // month is 0-indexed
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
@@ -558,14 +584,44 @@ class Stats {
     return 'All time';
   }
 
-  async buildEquityCurve() {
-    try {
-      const entries = this.getFilteredTrades();
-      const allEntries = state.journal.entries; // Need all entries for open positions
-      const startingBalance = state.settings.startingAccountSize;
+  findActualPriceDate(ticker, targetDateStr) {
+    // Helper to find which date was actually used for the price lookup
+    if (!historicalPrices.cache[ticker]) return null;
 
-      // Get closed trades sorted by close date
-      const closedTrades = entries
+    // Check exact match first
+    if (historicalPrices.cache[ticker][targetDateStr]) {
+      return targetDateStr;
+    }
+
+    // Look for nearest previous date (up to 7 days back, same as getPriceOnDate)
+    const targetDate = new Date(targetDateStr);
+    for (let i = 1; i <= 7; i++) {
+      const prevDate = new Date(targetDate);
+      prevDate.setDate(prevDate.getDate() - i);
+      const prevDateStr = historicalPrices.formatDate(prevDate);
+
+      if (historicalPrices.cache[ticker][prevDateStr]) {
+        return prevDateStr;
+      }
+    }
+
+    return null;
+  }
+
+  async buildEquityCurve() {
+    // Show loading spinner
+    if (this.elements.chartLoading) {
+      this.elements.chartLoading.style.display = 'inline-flex';
+    }
+
+    try {
+      // Always use ALL entries for equity curve - we want to see the true account balance
+      const allEntries = state.journal.entries;
+      const startingBalance = state.settings.startingAccountSize;
+      const cashFlowTransactions = (state.cashFlow && state.cashFlow.transactions) || [];
+
+      // Get closed trades sorted by close date (from ALL entries, not filtered)
+      const closedTrades = allEntries
         .filter(e => e.status === 'closed' || e.status === 'trimmed')
         .map(t => ({
           date: t.closeDate || t.timestamp,
@@ -575,20 +631,93 @@ class Stats {
         }))
         .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-      if (closedTrades.length === 0) {
+      // Get all entry dates to determine the start date
+      const allEntryDates = allEntries
+        .filter(e => e.timestamp)
+        .map(e => new Date(e.timestamp));
+
+      if (closedTrades.length === 0 && allEntryDates.length === 0) {
         return [];
       }
 
-      // Build data points for each closed trade
-      let balance = startingBalance;
+      // Determine date range: from first trade entry OR filter start date to filter end date (or today if no filter)
+      let firstDate;
+      if (this.filters.dateFrom) {
+        // If filter is set, start from filter date
+        firstDate = new Date(this.filters.dateFrom);
+        firstDate.setHours(0, 0, 0, 0);
+      } else {
+        // Otherwise start from first trade entry
+        firstDate = allEntryDates.length > 0
+          ? new Date(Math.min(...allEntryDates.map(d => d.getTime())))
+          : new Date(closedTrades[0].date);
+        firstDate.setHours(0, 0, 0, 0);
+      }
+
+      // Apply date filter if set, otherwise use today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let endDate = today;
+      if (this.filters.dateTo) {
+        endDate = new Date(this.filters.dateTo);
+        endDate.setHours(0, 0, 0, 0);
+      }
+
+      // Check if we're filtering to a date before today
+      const isFilteredToBeforeToday = this.filters.dateTo && endDate < today;
+
+      // Check if we have an API key for historical prices
+      const hasApiKey = historicalPrices.apiKey !== null;
+
+      console.log('Equity Curve Debug:');
+      console.log('First Date:', firstDate);
+      console.log('End Date:', endDate);
+      console.log('Today:', today);
+      console.log('All Entries Count:', allEntries.length);
+      console.log('Closed Trades Count:', closedTrades.length);
+      console.log('Has API Key:', hasApiKey);
+      console.log('Is Filtered To Before Today:', isFilteredToBeforeToday);
+
+      // Calculate starting balance for the filtered period
+      let adjustedStartingBalance = startingBalance;
+      if (this.filters.dateFrom) {
+        // Calculate realized P&L and cash flow up to the filter start date
+        const filterStartDate = new Date(this.filters.dateFrom);
+        filterStartDate.setHours(0, 0, 0, 0);
+
+        // Add realized P&L from trades closed before filter start date
+        const tradesBeforeFilter = closedTrades.filter(trade => {
+          const closeDate = new Date(trade.date);
+          closeDate.setHours(0, 0, 0, 0);
+          return closeDate < filterStartDate;
+        });
+        const realizedPnLBeforeFilter = tradesBeforeFilter.reduce((sum, t) => sum + t.pnl, 0);
+
+        // Add cash flow before filter start date
+        const cashFlowBeforeFilter = cashFlowTransactions
+          .filter(transaction => {
+            const txDate = new Date(transaction.timestamp);
+            txDate.setHours(0, 0, 0, 0);
+            return txDate < filterStartDate;
+          })
+          .reduce((sum, tx) => {
+            const amount = tx.type === 'deposit' ? tx.amount : -tx.amount;
+            return sum + amount;
+          }, 0);
+
+        adjustedStartingBalance = startingBalance + realizedPnLBeforeFilter + cashFlowBeforeFilter;
+      }
+
+      // Add starting point (day before first date in filtered range)
       const dataPoints = [{
-        date: new Date(closedTrades[0].date).getTime() - 86400000,
-        balance: startingBalance,
+        date: firstDate.getTime() - 86400000,
+        balance: adjustedStartingBalance,
         pnl: 0,
         ticker: 'Start'
       }];
 
-      // Group trades by day and create one point per day
+      // Group closed trades by day
       const tradesByDay = new Map();
       closedTrades.forEach(trade => {
         const dateStr = historicalPrices.formatDate(trade.date);
@@ -598,88 +727,273 @@ class Stats {
         tradesByDay.get(dateStr).push(trade);
       });
 
-      // Create one data point per day with end-of-day balance
-      const tradePoints = [];
-      const sortedDays = Array.from(tradesByDay.keys()).sort();
-
-      sortedDays.forEach(dateStr => {
-        const dayTrades = tradesByDay.get(dateStr);
-        // Add all P&L from trades on this day
-        const dayPnL = dayTrades.reduce((sum, t) => sum + t.pnl, 0);
-        balance += dayPnL;
-
-        tradePoints.push({
-          date: new Date(dateStr).getTime(),
-          dateStr,
-          balance,
-          pnl: dayPnL,
-          ticker: dayTrades.map(t => t.ticker).join(', ')
-        });
+      // Group cash flow by day
+      const cashFlowByDay = new Map();
+      cashFlowTransactions.forEach(transaction => {
+        const dateStr = historicalPrices.formatDate(transaction.timestamp);
+        if (!cashFlowByDay.has(dateStr)) {
+          cashFlowByDay.set(dateStr, 0);
+        }
+        const amount = transaction.type === 'deposit' ? transaction.amount : -transaction.amount;
+        cashFlowByDay.set(dateStr, cashFlowByDay.get(dateStr) + amount);
       });
 
-      // Check if we have an API key for historical prices
-      const hasApiKey = historicalPrices.apiKey !== null;
+      // Build array of all days from first trade through today (inclusive)
+      const tradePoints = [];
+      const currentDate = new Date(firstDate);
+
+      // Track cumulative values
+      let cumulativeRealizedPnL = 0;
+      let cumulativeCashFlow = 0;
+
+      // Loop through each day from first trade to end date (inclusive)
+      while (currentDate.getTime() <= endDate.getTime()) {
+        const dateStr = historicalPrices.formatDate(currentDate);
+        const dateTimestamp = currentDate.getTime();
+
+        // Add realized P&L from trades closed on this day
+        let dayPnL = 0;
+        if (tradesByDay.has(dateStr)) {
+          const dayTrades = tradesByDay.get(dateStr);
+          dayPnL = dayTrades.reduce((sum, t) => sum + t.pnl, 0);
+          cumulativeRealizedPnL += dayPnL;
+        }
+
+        // Add cash flow from this day
+        if (cashFlowByDay.has(dateStr)) {
+          cumulativeCashFlow += cashFlowByDay.get(dateStr);
+        }
+
+        // Calculate balance for this day (realized only for now)
+        const realizedBalance = startingBalance + cumulativeRealizedPnL + cumulativeCashFlow;
+
+        tradePoints.push({
+          date: dateTimestamp,
+          dateStr,
+          realizedBalance,
+          pnl: dayPnL,
+          ticker: tradesByDay.has(dateStr)
+            ? tradesByDay.get(dateStr).map(t => t.ticker).join(', ')
+            : ''
+        });
+
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
+        currentDate.setHours(0, 0, 0, 0);
+      }
+
+      console.log('Trade Points Created:', tradePoints.length);
+      console.log('Date Range:', tradePoints.length > 0 ?
+        `${tradePoints[0].dateStr} to ${tradePoints[tradePoints.length - 1].dateStr}` : 'none');
+
+      // Debug: Check a sample of tradePoints
+      if (tradePoints.length > 0) {
+        console.log('Sample tradePoints:', {
+          first: tradePoints[0],
+          last: tradePoints[tradePoints.length - 1],
+          secondToLast: tradePoints.length > 1 ? tradePoints[tradePoints.length - 2] : null
+        });
+      }
 
       if (hasApiKey) {
         // Get all unique tickers that were open at any point
         const allTickers = [...new Set(allEntries.map(e => e.ticker).filter(t => t))];
+        console.log('Fetching historical prices for tickers:', allTickers);
 
         if (allTickers.length > 0) {
-          await historicalPrices.batchFetchPrices(allTickers);
+          const results = await historicalPrices.batchFetchPrices(allTickers);
+          console.log('Historical prices fetch results:', results);
+          console.log('Historical prices cache sample:',
+            allTickers[0] ? historicalPrices.cache[allTickers[0]] : 'no tickers');
         }
-
-        // Now build final data points with unrealized P&L
-        tradePoints.forEach(point => {
-          // Find positions that were open on this date
-          const openOnDate = allEntries.filter(e => {
-            if (!e.timestamp) return false;
-            const entryDate = new Date(e.timestamp);
-            const closeDate = e.closeDate ? new Date(e.closeDate) : null;
-            const pointDate = new Date(point.date);
-
-            // Position was open if entry <= pointDate < close (or no close yet)
-            return entryDate <= pointDate && (!closeDate || closeDate > pointDate);
-          });
-
-          // Calculate unrealized P&L for all open positions on this date
-          let unrealizedPnL = 0;
-          openOnDate.forEach(trade => {
-            const pnl = historicalPrices.calculateUnrealizedPnL(trade, point.dateStr);
-            unrealizedPnL += pnl;
-          });
-
-          // Add point with realized + unrealized P&L
-          dataPoints.push({
-            date: point.date,
-            balance: point.balance + unrealizedPnL,
-            pnl: point.pnl,
-            ticker: point.ticker,
-            unrealizedPnL
-          });
-        });
-      } else {
-        // No API key - just show realized P&L
-        tradePoints.forEach(point => {
-          dataPoints.push({
-            date: point.date,
-            balance: point.balance,
-            pnl: point.pnl,
-            ticker: point.ticker
-          });
-        });
       }
 
-      // Add current point with current unrealized P&L
-      const currentOpenTrades = allEntries.filter(e => e.status === 'open' || e.status === 'trimmed');
-      const currentUnrealizedPnL = priceTracker.calculateTotalUnrealizedPnL(currentOpenTrades);
+      // Debug: Check what prices are available
+      console.log('PriceTracker.prices available:', priceTracker.prices);
+      const sampleTicker = allEntries.length > 0 ? allEntries[0].ticker : null;
+      if (sampleTicker) {
+        console.log(`Sample current price for ${sampleTicker}:`, priceTracker.prices?.[sampleTicker]);
+      }
 
-      if (currentUnrealizedPnL && currentUnrealizedPnL.totalPnL !== 0) {
+      // Build final data points with unrealized P&L for ALL days
+      // If no historical API key, use current prices as approximation
+      tradePoints.forEach((point, idx) => {
+        // Only log for last few days to avoid spam
+        const isRecentDay = idx >= tradePoints.length - 5;
+
+        // Find positions that were open on this date
+        const openOnDate = allEntries.filter(e => {
+          if (!e.timestamp) return false;
+          const entryDate = new Date(e.timestamp);
+          entryDate.setHours(0, 0, 0, 0);
+          const closeDate = e.closeDate ? new Date(e.closeDate) : null;
+          if (closeDate) closeDate.setHours(0, 0, 0, 0);
+          const pointDate = new Date(point.date);
+
+          // Position was open if entry <= pointDate < close (or no close yet)
+          return entryDate <= pointDate && (!closeDate || closeDate > pointDate);
+        });
+
+        if (isRecentDay) {
+          console.log(`\n=== Day ${point.dateStr} ===`);
+          console.log('Open positions:', openOnDate.map(t => t.ticker));
+        }
+
+        // Calculate unrealized P&L for all open positions on this date
+        let unrealizedPnL = 0;
+        openOnDate.forEach(trade => {
+          if (!trade.entry || !trade.shares) return;
+
+          // Determine how many shares were held on this specific date
+          // Need to account for trims that happened before this date
+          let sharesOnDate = trade.shares;
+          if (trade.trimHistory && Array.isArray(trade.trimHistory)) {
+            trade.trimHistory.forEach(trim => {
+              const trimDate = new Date(trim.date);
+              trimDate.setHours(0, 0, 0, 0);
+              const pointDate = new Date(point.date);
+              if (trimDate <= pointDate) {
+                sharesOnDate -= trim.shares;
+              }
+            });
+          }
+
+          if (sharesOnDate <= 0) return; // No shares held on this date
+
+          if (hasApiKey) {
+            // Use historical prices if available
+            const historicalPrice = historicalPrices.getPriceOnDate(trade.ticker, point.dateStr);
+
+            if (historicalPrice) {
+              // Check if this price is recent (within 2 days of the point date)
+              const pointDateObj = new Date(point.date);
+              const priceDate = this.findActualPriceDate(trade.ticker, point.dateStr);
+
+              if (priceDate) {
+                const priceDateObj = new Date(priceDate);
+                const daysDiff = Math.floor((pointDateObj - priceDateObj) / (1000 * 60 * 60 * 24));
+
+                if (isRecentDay) {
+                  console.log(`  ${trade.ticker}:`);
+                  console.log(`    Historical price date: ${priceDate}`);
+                  console.log(`    Days diff: ${daysDiff}`);
+                  console.log(`    Historical price: $${historicalPrice}`);
+                }
+
+                // If price is more than 2 days old, try to use current price instead
+                if (daysDiff > 2) {
+                  // Check if we have current price data
+                  let currentPrice = null;
+                  if (priceTracker.prices && priceTracker.prices[trade.ticker]) {
+                    currentPrice = priceTracker.prices[trade.ticker].price;
+                  }
+
+                  if (isRecentDay) {
+                    console.log(`    Price is STALE (>${2} days old)`);
+                    console.log(`    Current price available:`, currentPrice);
+                  }
+
+                  if (currentPrice) {
+                    unrealizedPnL += (currentPrice - trade.entry) * sharesOnDate;
+                    if (isRecentDay) {
+                      console.log(`    ✓ USING CURRENT PRICE: $${currentPrice}`);
+                    }
+                  } else {
+                    // Fall back to historical price even if old
+                    unrealizedPnL += (historicalPrice - trade.entry) * sharesOnDate;
+                    if (isRecentDay) {
+                      console.log(`    ✗ FALLING BACK TO STALE HISTORICAL PRICE: $${historicalPrice}`);
+                    }
+                  }
+                } else {
+                  unrealizedPnL += (historicalPrice - trade.entry) * sharesOnDate;
+                  if (isRecentDay) {
+                    console.log(`    ✓ Using fresh historical price: $${historicalPrice}`);
+                  }
+                }
+              } else {
+                unrealizedPnL += (historicalPrice - trade.entry) * sharesOnDate;
+                if (isRecentDay) {
+                  console.log(`  ${trade.ticker}: No price date found, using historical: $${historicalPrice}`);
+                }
+              }
+            } else {
+              // No historical price found - use current price as fallback
+              const currentPrice = priceTracker.prices?.[trade.ticker]?.price;
+              if (currentPrice) {
+                unrealizedPnL += (currentPrice - trade.entry) * sharesOnDate;
+                if (isRecentDay) {
+                  console.log(`  ${trade.ticker}: No historical price, using current: $${currentPrice}`);
+                }
+              } else {
+                if (isRecentDay) {
+                  console.log(`  ${trade.ticker}: NO PRICE AVAILABLE AT ALL`);
+                }
+              }
+            }
+          } else {
+            // No API key - use current prices as approximation
+            const currentPrice = priceTracker.prices?.[trade.ticker]?.price;
+            if (currentPrice) {
+              unrealizedPnL += (currentPrice - trade.entry) * sharesOnDate;
+            }
+          }
+        });
+
+        if (isRecentDay) {
+          console.log(`  Total unrealized P&L: $${unrealizedPnL.toFixed(2)}`);
+          console.log(`  Realized balance: $${point.realizedBalance.toFixed(2)}`);
+          console.log(`  Total balance: $${(point.realizedBalance + unrealizedPnL).toFixed(2)}`);
+        }
+
+        // Balance = realized balance + unrealized P&L on that day
         dataPoints.push({
-          date: Date.now(),
-          balance: balance + currentUnrealizedPnL.totalPnL,
-          pnl: 0,
-          ticker: 'Current',
-          unrealizedPnL: currentUnrealizedPnL.totalPnL
+          date: point.date,
+          balance: point.realizedBalance + unrealizedPnL,
+          pnl: point.pnl,
+          ticker: point.ticker,
+          unrealizedPnL
+        });
+      });
+
+      // Only add a final point for RIGHT NOW if we're not filtering to a date before today
+      if (!isFilteredToBeforeToday) {
+        const currentOpenTrades = allEntries.filter(e => e.status === 'open' || e.status === 'trimmed');
+        if (currentOpenTrades.length > 0) {
+          const currentUnrealizedPnL = priceTracker.calculateTotalUnrealizedPnL(currentOpenTrades);
+          const lastRealizedBalance = tradePoints.length > 0
+            ? tradePoints[tradePoints.length - 1].realizedBalance
+            : startingBalance;
+
+          // Add current moment with live prices
+          dataPoints.push({
+            date: Date.now(),
+            balance: lastRealizedBalance + (currentUnrealizedPnL?.totalPnL || 0),
+            pnl: 0,
+            ticker: 'Now',
+            unrealizedPnL: currentUnrealizedPnL?.totalPnL || 0
+          });
+        }
+      }
+
+      console.log('Final Data Points:', dataPoints.length);
+      if (dataPoints.length > 0) {
+        console.log('Last 3 Data Points:', {
+          thirdToLast: dataPoints.length > 2 ? {
+            date: new Date(dataPoints[dataPoints.length - 3].date).toISOString(),
+            balance: dataPoints[dataPoints.length - 3].balance,
+            unrealizedPnL: dataPoints[dataPoints.length - 3].unrealizedPnL
+          } : null,
+          secondToLast: dataPoints.length > 1 ? {
+            date: new Date(dataPoints[dataPoints.length - 2].date).toISOString(),
+            balance: dataPoints[dataPoints.length - 2].balance,
+            unrealizedPnL: dataPoints[dataPoints.length - 2].unrealizedPnL
+          } : null,
+          last: {
+            date: new Date(dataPoints[dataPoints.length - 1].date).toISOString(),
+            balance: dataPoints[dataPoints.length - 1].balance,
+            unrealizedPnL: dataPoints[dataPoints.length - 1].unrealizedPnL
+          }
         });
       }
 
@@ -688,6 +1002,11 @@ class Stats {
       console.error('Error building equity curve:', error);
       // Return basic equity curve without historical unrealized P&L
       return this.buildBasicEquityCurve();
+    } finally {
+      // Hide loading spinner
+      if (this.elements.chartLoading) {
+        this.elements.chartLoading.style.display = 'none';
+      }
     }
   }
 

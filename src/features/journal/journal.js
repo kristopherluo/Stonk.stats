@@ -147,7 +147,6 @@ class Journal {
 
       // Export buttons (journal modal)
       journalCopyCSV: document.getElementById('journalCopyCSV'),
-      journalCopyTSV: document.getElementById('journalCopyTSV'),
       journalDownload: document.getElementById('journalDownload')
     };
   }
@@ -201,9 +200,6 @@ class Journal {
     // Export buttons (journal modal)
     if (this.elements.journalCopyCSV) {
       this.elements.journalCopyCSV.addEventListener('click', () => dataManager.copyCSV());
-    }
-    if (this.elements.journalCopyTSV) {
-      this.elements.journalCopyTSV.addEventListener('click', () => dataManager.copyTSV());
     }
     if (this.elements.journalDownload) {
       this.elements.journalDownload.addEventListener('click', () => dataManager.exportCSV());

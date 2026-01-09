@@ -8,6 +8,7 @@ import { showToast } from '../../components/ui/ui.js';
 import { dataManager } from '../../core/dataManager.js';
 import { clearDataModal } from '../../components/modals/clearDataModal.js';
 import { priceTracker } from '../../core/priceTracker.js';
+import { historicalPrices } from '../../core/historicalPrices.js';
 
 class Settings {
   constructor() {
@@ -219,6 +220,7 @@ class Settings {
     if (this.elements.twelveDataApiKey && this.elements.twelveDataApiKeyBtn) {
       const saveTwelveDataKey = (apiKey) => {
         localStorage.setItem('twelveDataApiKey', apiKey);
+        historicalPrices.setApiKey(apiKey);
         if (apiKey) {
           showToast('✅ Twelve Data API key saved - 800 calls/day for charts!', 'success');
         }
@@ -346,6 +348,10 @@ class Settings {
     const twelveDataKey = localStorage.getItem('twelveDataApiKey') || '';
     if (this.elements.twelveDataApiKey) {
       this.elements.twelveDataApiKey.value = twelveDataKey;
+    }
+    // Load API key into historicalPrices
+    if (twelveDataKey) {
+      historicalPrices.setApiKey(twelveDataKey);
     }
 
     const alphaVantageKey = localStorage.getItem('alphaVantageApiKey') || '';

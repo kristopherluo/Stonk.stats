@@ -161,9 +161,7 @@ class App {
     window.importData = () => dataManager.importData();
     window.clearAllData = () => dataManager.clearAllData();
     window.exportCSV = () => dataManager.exportCSV();
-    window.exportTSV = () => dataManager.exportTSV();
     window.copyCSV = () => dataManager.copyCSV();
-    window.copyTSV = () => dataManager.copyTSV();
   }
 }
 

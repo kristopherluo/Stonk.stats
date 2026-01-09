@@ -86,7 +86,6 @@ class JournalView {
 
       // Export buttons
       exportCSV: document.getElementById('journalExportCSV'),
-      exportTSV: document.getElementById('journalExportTSV'),
 
       // Filter dropdown
       filterBtn: document.getElementById('journalFilterBtn'),
@@ -211,11 +210,6 @@ class JournalView {
     if (this.elements.exportCSV) {
       this.elements.exportCSV.addEventListener('click', () => {
         dataManager.exportCSV();
-      });
-    }
-    if (this.elements.exportTSV) {
-      this.elements.exportTSV.addEventListener('click', () => {
-        dataManager.exportTSV();
       });
     }
 
@@ -797,16 +791,16 @@ class JournalView {
         }
       }
 
-      // Determine exit price color
-      let exitPriceColor = '';
+      // Determine exit price class
+      let exitPriceClass = '';
       if (trade.exitPrice) {
         const priceDiff = trade.exitPrice - trade.entry;
         if (Math.abs(priceDiff) < 0.01) {
-          exitPriceColor = 'color: var(--text-primary);'; // Breakeven - white
+          exitPriceClass = ''; // Breakeven - default white
         } else if (priceDiff > 0) {
-          exitPriceColor = 'color: var(--success);'; // Green for profit
+          exitPriceClass = 'journal-table__pnl--positive'; // Green for profit
         } else {
-          exitPriceColor = 'color: var(--danger);'; // Red for loss
+          exitPriceClass = 'journal-table__pnl--negative'; // Red for loss
         }
       }
 
@@ -815,7 +809,7 @@ class JournalView {
           <td>${formatDate(trade.timestamp)}</td>
           <td><strong>${trade.ticker}</strong></td>
           <td style="color: var(--primary);">${formatCurrency(trade.entry)}</td>
-          <td style="${exitPriceColor}">${trade.exitPrice ? formatCurrency(trade.exitPrice) : '—'}</td>
+          <td class="${exitPriceClass}">${trade.exitPrice ? formatCurrency(trade.exitPrice) : '—'}</td>
           <td>${sharesDisplay}</td>
           <td>${positionPercent !== null ? `${positionPercent.toFixed(2)}%` : '—'}</td>
           <td class="${hasPnL ? (pnl >= 0 ? 'journal-table__pnl--positive' : 'journal-table__pnl--negative') : ''}">

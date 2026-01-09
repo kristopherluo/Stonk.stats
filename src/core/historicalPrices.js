@@ -34,45 +34,41 @@ class HistoricalPrices {
 
   /**
    * Fetch historical prices for a ticker
-   * Uses Alpha Vantage TIME_SERIES_DAILY endpoint
+   * Uses Twelve Data TIME_SERIES endpoint
    */
   async fetchHistoricalPrices(ticker, outputSize = 'compact') {
     if (!this.apiKey) {
-      console.warn('No Alpha Vantage API key set for historical prices');
+      console.warn('No Twelve Data API key set for historical prices');
       return null;
     }
 
     try {
-      const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&outputsize=${outputSize}&apikey=${this.apiKey}`;
+      // Twelve Data API endpoint - outputsize: 5000 for max data
+      const url = `https://api.twelvedata.com/time_series?symbol=${ticker}&interval=1day&outputsize=5000&apikey=${this.apiKey}`;
 
       const response = await fetch(url);
       const data = await response.json();
 
       // Check for API errors
-      if (data['Error Message']) {
-        console.error('Alpha Vantage error:', data['Error Message']);
+      if (data.status === 'error') {
+        console.error('Twelve Data error:', data.message);
         return null;
       }
 
-      if (data['Note']) {
-        console.warn('Alpha Vantage rate limit:', data['Note']);
-        return null;
-      }
-
-      const timeSeries = data['Time Series (Daily)'];
-      if (!timeSeries) {
+      if (!data.values || !Array.isArray(data.values)) {
         console.warn('No time series data for', ticker);
         return null;
       }
 
-      // Parse and cache
+      // Parse and cache - Twelve Data format
       const prices = {};
-      for (const [date, values] of Object.entries(timeSeries)) {
+      for (const item of data.values) {
+        const date = item.datetime; // YYYY-MM-DD format
         prices[date] = {
-          open: parseFloat(values['1. open']),
-          high: parseFloat(values['2. high']),
-          low: parseFloat(values['3. low']),
-          close: parseFloat(values['4. close'])
+          open: parseFloat(item.open),
+          high: parseFloat(item.high),
+          low: parseFloat(item.low),
+          close: parseFloat(item.close)
         };
       }
 
@@ -126,7 +122,7 @@ class HistoricalPrices {
   }
 
   /**
-   * Check if we have recent data for a ticker (within last 7 days)
+   * Check if we have recent data for a ticker (within last 2 days)
    */
   hasRecentData(ticker) {
     if (!this.cache[ticker]) return false;
@@ -140,7 +136,9 @@ class HistoricalPrices {
     const today = new Date();
     const daysDiff = Math.floor((today - mostRecentDate) / (1000 * 60 * 60 * 24));
 
-    return daysDiff <= 7;
+    // Use 2-day threshold to ensure we fetch fresh data more frequently
+    // This is important for equity curve accuracy
+    return daysDiff <= 2;
   }
 
   /**

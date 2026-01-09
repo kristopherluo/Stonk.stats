@@ -228,35 +228,6 @@ export const dataManager = {
     showToast('📥 CSV exported', 'success');
   },
 
-  exportTSV() {
-    const trades = state.journal.entries;
-    if (trades.length === 0) {
-      showToast('⚠️ No trades to export', 'warning');
-      return;
-    }
-
-    const headers = ['Date', 'Ticker', 'Entry', 'Stop', 'Target', 'Shares', 'Position Size', 'Risk $', 'Risk %', 'Status', 'Exit Price', 'P&L', 'Notes'];
-    const rows = trades.map(t => [
-      new Date(t.timestamp).toLocaleDateString(),
-      t.ticker,
-      t.entry,
-      t.stop,
-      t.target || '',
-      t.shares,
-      t.positionSize?.toFixed(2) || '',
-      t.riskDollars?.toFixed(2) || '',
-      t.riskPercent,
-      t.status,
-      t.exitPrice || '',
-      t.pnl?.toFixed(2) || '',
-      (t.notes || '').replace(/\t/g, ' ')
-    ]);
-
-    const tsv = [headers.join('\t'), ...rows.map(r => r.join('\t'))].join('\n');
-    this.downloadFile(tsv, 'trades.tsv', 'text/tab-separated-values');
-    showToast('📥 TSV exported', 'success');
-  },
-
   copyCSV() {
     const trades = state.journal.entries;
     if (trades.length === 0) {
@@ -279,33 +250,6 @@ export const dataManager = {
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     navigator.clipboard.writeText(csv).then(() => {
       showToast('📋 CSV copied to clipboard', 'success');
-    }).catch(() => {
-      showToast('❌ Failed to copy', 'error');
-    });
-  },
-
-  copyTSV() {
-    const trades = state.journal.entries;
-    if (trades.length === 0) {
-      showToast('⚠️ No trades to copy', 'warning');
-      return;
-    }
-
-    const headers = ['Date', 'Ticker', 'Entry', 'Stop', 'Shares', 'Risk $', 'Status', 'P&L'];
-    const rows = trades.map(t => [
-      new Date(t.timestamp).toLocaleDateString(),
-      t.ticker,
-      t.entry,
-      t.stop,
-      t.shares,
-      t.riskDollars?.toFixed(2) || '',
-      t.status,
-      t.pnl?.toFixed(2) || ''
-    ]);
-
-    const tsv = [headers.join('\t'), ...rows.map(r => r.join('\t'))].join('\n');
-    navigator.clipboard.writeText(tsv).then(() => {
-      showToast('📋 TSV copied to clipboard (paste into Excel)', 'success');
     }).catch(() => {
       showToast('❌ Failed to copy', 'error');
     });

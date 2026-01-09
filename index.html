@@ -273,6 +273,14 @@
           <span class="journal-summary-bar__label">Trades</span>
           <span class="journal-summary-bar__value" id="journalCount">0</span>
         </div>
+        <button class="btn btn--primary journal-export-btn" id="journalExportCSV">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export CSV
+        </button>
       </div>
 
       <!-- Filters Section -->
@@ -403,22 +411,7 @@
 
       <!-- Empty State -->
       <div class="journal-empty" id="journalEmpty">
-        <span class="journal-empty__icon">📝</span>
-        <h2 class="journal-empty__title">No Trades Yet</h2>
-        <p class="journal-empty__text">Start logging trades to build your trading history.</p>
-        <button class="btn btn--primary" id="journalNewBtn">Open Wizard</button>
-      </div>
-
-      <!-- Export Actions -->
-      <div class="journal-actions">
-        <button class="btn btn--secondary" id="journalExportCSV">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          Export CSV
-        </button>
+        <h2 class="journal-empty__title">No Trades</h2>
       </div>
     </section>
 
@@ -426,10 +419,7 @@
     <section class="stats-view view--hidden" id="statsView">
       <div class="stats-header">
         <div class="stats-header__left">
-          <div>
-            <h1 class="stats-header__title">Trading Stats</h1>
-            <span class="stats-header__subtitle" id="statsDateRange">All time</span>
-          </div>
+          <span class="stats-header__date-range" id="statsDateRange">All time</span>
         </div>
         <div class="stats-header__filters">
           <div class="filter-dropdown">
@@ -481,7 +471,7 @@
       <!-- Trading Performance Section -->
       <div class="stats-section">
         <div class="stats-section__header">
-          <h2 class="stats-section__title">Trading Performance</h2>
+          <h2 class="stats-section__title">Performance</h2>
         </div>
         <div class="stats-grid">
           <div class="stat-card">
@@ -510,7 +500,7 @@
       <!-- Account Growth Section -->
       <div class="stats-section">
         <div class="stats-section__header">
-          <h2 class="stats-section__title">Account Growth</h2>
+          <h2 class="stats-section__title">Growth</h2>
         </div>
         <div class="stats-grid">
           <div class="stat-card stat-card--lg">
@@ -540,7 +530,14 @@
       <div class="stats-section">
         <div class="stats-chart">
           <div class="stats-chart__header">
-            <h3 class="stats-chart__title">Equity Curve</h3>
+            <h3 class="stats-chart__title">
+              Equity Curve
+              <span class="stats-chart__loading" id="equityChartLoading" style="display: none;">
+                <svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                </svg>
+              </span>
+            </h3>
             <span class="stats-chart__value" id="statChartValue">$10,000</span>
           </div>
           <div class="stats-chart__container" id="equityChartContainer">

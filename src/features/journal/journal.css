@@ -211,6 +211,19 @@
   background: var(--border-subtle);
 }
 
+/* Export button in summary bar */
+.journal-export-btn {
+  margin-left: auto;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  gap: var(--space-1);
+}
+
+.journal-export-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* === Filter Section (below summary bar) === */
 
 .journal-filter-section {
@@ -347,6 +360,36 @@
 @keyframes tickerShimmer {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
+}
+
+/* Date column (1st) - visible blue glow */
+.journal-view .journal-table td:nth-child(1) {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.6),
+    0 0 16px rgba(96, 165, 250, 0.3);
+}
+
+/* Entry column (3rd) - blue glow matching position cards */
+.journal-view .journal-table td:nth-child(3) {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.6),
+    0 0 16px rgba(96, 165, 250, 0.3);
+}
+
+/* Exit column (4th) uses journal-table__pnl--positive/negative classes for consistent styling with P&L columns */
+
+/* Shares column (5th) - visible glow */
+.journal-view .journal-table td:nth-child(5) {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.6),
+    0 0 16px rgba(96, 165, 250, 0.3);
+}
+
+/* Position % column (6th) - visible glow */
+.journal-view .journal-table td:nth-child(6) {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.6),
+    0 0 16px rgba(96, 165, 250, 0.3);
 }
 
 .journal-view .journal-table tbody tr {
