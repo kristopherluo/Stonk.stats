@@ -347,6 +347,8 @@ class EquityCurveManager {
    * Uses cache if valid, otherwise recalculates
    */
   async buildEquityCurve(filterStartDate = null, filterEndDate = null) {
+    console.time('[Stats] buildEquityCurve total');
+
     // Check if cache exists and has data
     const hasCacheData = this.cache && this.cache.curve && Object.keys(this.cache.curve).length > 0;
 
@@ -354,8 +356,10 @@ class EquityCurveManager {
     const useCache = hasCacheData && (this.cache.partiallyInvalidated || this._isCacheValid());
 
     if (useCache) {
+      console.time('[Stats] fillCacheGaps');
       // Cache exists - check for gaps and fill them
       await this._fillCacheGaps();
+      console.timeEnd('[Stats] fillCacheGaps');
 
       // Verify cache still exists after filling gaps
       if (!this.cache || !this.cache.curve) {
@@ -371,11 +375,15 @@ class EquityCurveManager {
 
       if (cacheEndDate < today) {
         // Append new days from cache end to today
+        console.time('[Stats] appendNewDays');
         await this._appendNewDays();
+        console.timeEnd('[Stats] appendNewDays');
       } else if (cacheEndDate.getTime() === today.getTime()) {
         // Today is already in cache, but prices may have changed
         // Recalculate today's unrealized P&L with current prices
+        console.time('[Stats] recalculateTodayUnrealizedPnL');
         await this._recalculateTodayUnrealizedPnL();
+        console.timeEnd('[Stats] recalculateTodayUnrealizedPnL');
       }
 
       // Clear partial invalidation flag and update hash
@@ -386,13 +394,18 @@ class EquityCurveManager {
       }
 
       // Return filtered curve data
+      console.timeEnd('[Stats] buildEquityCurve total');
       return this._getFilteredCurve(filterStartDate, filterEndDate);
     }
 
     // Cache invalid or doesn't exist - rebuild from scratch
+    console.log('[Stats] Cache invalid - rebuilding full curve');
+    console.time('[Stats] rebuildFullCurve');
     await this._rebuildFullCurve();
+    console.timeEnd('[Stats] rebuildFullCurve');
 
     // Return filtered curve data
+    console.timeEnd('[Stats] buildEquityCurve total');
     return this._getFilteredCurve(filterStartDate, filterEndDate);
   }
 
@@ -783,12 +796,33 @@ class EquityCurveManager {
       cashFlowByDay.set(dateStr, cashFlowByDay.get(dateStr) + amount);
     });
 
-    // Fetch historical prices for new days if needed (BATCHED!)
+    // Fetch historical prices ONLY for tickers active during the new date range (BATCHED!)
     const hasApiKey = historicalPricesBatcher.apiKey !== null;
     if (hasApiKey) {
-      const allTickers = [...new Set(allEntries.map(e => e.ticker).filter(t => t))];
-      if (allTickers.length > 0) {
-        await historicalPricesBatcher.batchFetchPrices(allTickers);
+      // Find tickers that were active between startDate and endDate
+      const affectedTickers = new Set();
+      allEntries.forEach(trade => {
+        const entryDate = this._formatDate(new Date(trade.timestamp));
+        let exitDate = this._formatDate(endDate);
+
+        if (trade.status === 'closed' && trade.closeDate) {
+          exitDate = this._formatDate(new Date(trade.closeDate));
+        }
+
+        // If trade was active during the new date range, include its ticker
+        const startDateStr = this._formatDate(startDate);
+        const endDateStr = this._formatDate(endDate);
+        if (exitDate >= startDateStr && entryDate <= endDateStr) {
+          affectedTickers.add(trade.ticker);
+        }
+      });
+
+      if (affectedTickers.size > 0) {
+        console.log('[Stats] Fetching historical prices for tickers:', Array.from(affectedTickers));
+        console.log('[Stats] Date range:', this._formatDate(startDate), 'to', this._formatDate(endDate));
+        await historicalPricesBatcher.batchFetchPrices(Array.from(affectedTickers));
+      } else {
+        console.log('[Stats] No tickers need price fetching for this date range');
       }
     }
 

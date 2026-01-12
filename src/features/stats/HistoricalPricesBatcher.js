@@ -183,19 +183,28 @@ class HistoricalPricesBatcher {
     const results = {};
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // Filter out tickers that already have recent data
+    // Filter out tickers that already have cached data
     const tickersToFetch = [];
+    const tickersUsingCache = [];
     for (const ticker of tickers) {
       if (this.hasRecentData(ticker)) {
         results[ticker] = this.cache[ticker];
+        tickersUsingCache.push(ticker);
       } else {
         tickersToFetch.push(ticker);
       }
     }
 
+    if (tickersUsingCache.length > 0) {
+      console.log(`[Prices] Using cached data for ${tickersUsingCache.length} tickers:`, tickersUsingCache.join(', '));
+    }
+
     if (tickersToFetch.length === 0) {
+      console.log('[Prices] All tickers using cache - no API calls needed');
       return results;
     }
+
+    console.log(`[Prices] Fetching new data for ${tickersToFetch.length} tickers:`, tickersToFetch.join(', '));
 
     // Group into batches of BATCH_SIZE
     const batches = [];
@@ -228,7 +237,8 @@ class HistoricalPricesBatcher {
   }
 
   /**
-   * Check if we have recent data for a ticker (within last 2 days)
+   * Check if we have historical data for a ticker
+   * Historical prices don't expire - once cached, they're always valid
    */
   hasRecentData(ticker) {
     if (!this.cache[ticker]) return false;
@@ -236,13 +246,9 @@ class HistoricalPricesBatcher {
     const dates = Object.keys(this.cache[ticker]);
     if (dates.length === 0) return false;
 
-    // Get most recent date in cache
-    const mostRecent = dates.sort().reverse()[0];
-    const mostRecentDate = new Date(mostRecent);
-    const today = new Date();
-    const daysDiff = Math.floor((today - mostRecentDate) / (1000 * 60 * 60 * 24));
-
-    return daysDiff <= 2;
+    // Historical prices don't change, so if we have any data cached, use it
+    // We'll fetch additional dates if needed, but won't refetch existing dates
+    return true;
   }
 
   /**

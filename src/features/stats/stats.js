@@ -327,19 +327,29 @@ class Stats {
   async refresh() {
     if (this.isCalculating) return;
 
+    console.time('[Stats] refresh total');
     this.isCalculating = true;
     this.showLoadingState(true);
 
     try {
+      console.time('[Stats] calculate');
       await this.calculate();
+      console.timeEnd('[Stats] calculate');
+
+      console.time('[Stats] render');
       this.render();
+      console.timeEnd('[Stats] render');
+
+      console.time('[Stats] renderEquityCurve');
       await this.renderEquityCurve();
+      console.timeEnd('[Stats] renderEquityCurve');
     } catch (error) {
       console.error('Error refreshing stats:', error);
       showToast('Error calculating stats', 'error');
     } finally {
       this.showLoadingState(false);
       this.isCalculating = false;
+      console.timeEnd('[Stats] refresh total');
     }
   }
 
