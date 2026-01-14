@@ -758,25 +758,17 @@ class TrimModal {
         const newTotalRealizedPnL = updatedTrimHistory.reduce((sum, trim) => sum + trim.pnl, 0);
         updates.totalRealizedPnL = newTotalRealizedPnL;
 
-        // Update account realized P&L difference
-        const oldTotalPnL = this.currentTrade.totalRealizedPnL || 0;
-        const pnlDifference = newTotalRealizedPnL - oldTotalPnL;
-        state.updateAccount({ realizedPnL: state.account.realizedPnL + pnlDifference });
-
         // If position is closed, update the final P&L
         if (this.currentTrade.status === 'closed') {
           updates.pnl = newTotalRealizedPnL;
         }
-
-        // Update account size (dynamic account tracking always enabled)
-        const netCashFlow = state.getCashFlowNet();
-        const newSize = state.settings.startingAccountSize + state.account.realizedPnL + netCashFlow;
-        state.updateAccount({ currentSize: newSize });
-        state.emit('accountSizeChanged', newSize);
       }
 
       // Update the trade
       state.updateJournalEntry(this.currentTrade.id, updates);
+
+      // Trade update triggers cache invalidation, emit event with computed value
+      state.emit('accountSizeChanged', state.currentSize);
 
       showToast(
         `✅ ${this.currentTrade.ticker} position details updated`,
@@ -916,13 +908,9 @@ class TrimModal {
     }
 
     state.updateJournalEntry(this.currentTrade.id, updates);
-    state.updateAccount({ realizedPnL: state.account.realizedPnL + pnl });
 
-    // Update account size (dynamic account tracking always enabled)
-    const netCashFlow = state.getCashFlowNet();
-    const newSize = state.settings.startingAccountSize + state.account.realizedPnL + netCashFlow;
-    state.updateAccount({ currentSize: newSize });
-    state.emit('accountSizeChanged', newSize);
+    // Trade update triggers cache invalidation, emit event with computed value
+    state.emit('accountSizeChanged', state.currentSize);
 
     const actionText = isFullClose ? 'closed' : `trimmed ${Math.round(actualPercentTrimmed)}%`;
     showToast(

@@ -10,6 +10,7 @@ import { clearDataModal } from '../../components/modals/clearDataModal.js';
 import { priceTracker } from '../../core/priceTracker.js';
 import { historicalPrices } from '../../core/historicalPrices.js';
 import { historicalPricesBatcher } from '../stats/HistoricalPricesBatcher.js';
+import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 
 class Settings {
   constructor() {
@@ -143,21 +144,15 @@ class Settings {
 
         state.updateSettings({ startingAccountSize: value });
 
-        // Calculate new current size: starting + realized P&L + net cash flow
-        // Note: unrealized P&L should NOT be included in account.currentSize
-        const realizedPnL = state.account.realizedPnL;
-        const netCashFlow = state.getCashFlowNet();
-
-        const newCurrentSize = value + realizedPnL + netCashFlow;
-
-        state.updateAccount({ currentSize: newCurrentSize });
         this.updateSummary();
-        // Sync to Quick Settings field
+
+        // Sync to Quick Settings field (now reads computed value)
         if (this.elements.accountSize) {
-          this.elements.accountSize.value = formatWithCommas(newCurrentSize);
+          this.elements.accountSize.value = formatWithCommas(state.currentSize);
         }
-        this.updateAccountDisplay(newCurrentSize);
-        state.emit('accountSizeChanged', newCurrentSize);
+
+        this.updateAccountDisplay(state.currentSize);
+        state.emit('accountSizeChanged', state.currentSize);
 
         // Store as previous valid value
         this.previousValidAccountSize = value;
@@ -568,6 +563,18 @@ class Settings {
     setTimeout(() => {
       this.elements.headerAccountValue?.classList.remove('updated');
     }, 500);
+  }
+
+  setAccountLoading(isLoading) {
+    if (!this.elements.headerAccountValue) return;
+
+    if (isLoading) {
+      this.elements.headerAccountValue.classList.add('animate-pulse');
+      this.elements.headerAccountValue.style.opacity = '0.6';
+    } else {
+      this.elements.headerAccountValue.classList.remove('animate-pulse');
+      this.elements.headerAccountValue.style.opacity = '1';
+    }
   }
 
   handleDeposit() {

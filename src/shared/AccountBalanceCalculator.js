@@ -152,15 +152,22 @@ class AccountBalanceCalculator {
   }
 
   /**
-   * Calculate total realized P&L from all closed trades
+   * Calculate total realized P&L from all closed trades and trimmed positions
    * @param {Array} allTrades - All trades
    * @returns {number} Total realized P&L
    * @private
    */
   _calculateRealizedPnL(allTrades) {
-    return allTrades
-      .filter(t => t.status === 'closed')
-      .reduce((sum, t) => sum + (t.pnl || 0), 0);
+    return allTrades.reduce((sum, t) => {
+      if (t.status === 'closed') {
+        // Fully closed trade
+        return sum + (t.pnl || 0);
+      } else if (t.status === 'trimmed') {
+        // Trimmed trade - use totalRealizedPnL which includes all trim profits
+        return sum + (t.totalRealizedPnL || 0);
+      }
+      return sum;
+    }, 0);
   }
 
   /**

@@ -16,8 +16,7 @@ class AppState {
       },
 
       account: {
-        currentSize: 10000,
-        realizedPnL: 0,
+        // currentSize and realizedPnL are now computed properties (see getters below)
         riskPercent: 1,
         maxPositionPercent: 100
       },
@@ -86,6 +85,22 @@ class AppState {
     this._debouncedSaveJournal = debounce(() => this._saveJournalImmediate(), 300);
     this._debouncedSaveCashFlow = debounce(() => this._saveCashFlowImmediate(), 300);
     this._debouncedSaveJournalMeta = debounce(() => this._saveJournalMetaImmediate(), 300);
+
+    // Cache for computed account values (realizedPnL, currentSize)
+    // Invalidated when trades, cash flow, or starting balance changes
+    this._accountCache = {
+      realizedPnL: null,
+      currentSize: null,
+      lastInvalidated: Date.now(),
+      dependencies: {
+        tradesHash: null,
+        cashFlowHash: null,
+        startingBalance: null
+      }
+    };
+
+    // Cache Proxy instance to fix identity comparison issues
+    this._accountProxy = null;
   }
 
   // Event system
@@ -111,6 +126,74 @@ class AppState {
     }
   }
 
+  // Cache management for computed properties
+  /**
+   * Calculate hash of trades for cache invalidation
+   * Quick hash: count + sum of IDs + sum of realized P&L
+   */
+  _hashTrades() {
+    return this.state.journal.entries.length +
+      this.state.journal.entries.reduce((sum, t) =>
+        sum + t.id + (t.totalRealizedPnL ?? t.pnl ?? 0), 0
+      );
+  }
+
+  /**
+   * Calculate hash of cash flow for cache invalidation
+   */
+  _hashCashFlow() {
+    return this.state.cashFlow.transactions.length +
+      this.state.cashFlow.totalDeposits +
+      this.state.cashFlow.totalWithdrawals;
+  }
+
+  /**
+   * Check if account cache needs recalculation
+   * Memoizes hash calculations to avoid redundant iterations
+   */
+  _needsRecalculation() {
+    const tradesHash = this._hashTrades();
+    const cashFlowHash = this._hashCashFlow();
+    const startingBalance = this.state.settings.startingAccountSize;
+
+    const changed = tradesHash !== this._accountCache.dependencies.tradesHash ||
+           cashFlowHash !== this._accountCache.dependencies.cashFlowHash ||
+           startingBalance !== this._accountCache.dependencies.startingBalance;
+
+    // Cache computed hashes to avoid recalculating in _updateCacheDependencies
+    if (changed) {
+      this._accountCache._tempHashes = { tradesHash, cashFlowHash, startingBalance };
+    }
+
+    return changed;
+  }
+
+  /**
+   * Update cache dependency hashes after recalculation
+   * Uses memoized hashes from _needsRecalculation to avoid redundant iterations
+   */
+  _updateCacheDependencies() {
+    // Use cached hashes if available (from _needsRecalculation)
+    if (this._accountCache._tempHashes) {
+      this._accountCache.dependencies = { ...this._accountCache._tempHashes };
+      delete this._accountCache._tempHashes;
+    } else {
+      // Fallback: recalculate (shouldn't happen in normal flow)
+      this._accountCache.dependencies.tradesHash = this._hashTrades();
+      this._accountCache.dependencies.cashFlowHash = this._hashCashFlow();
+      this._accountCache.dependencies.startingBalance = this.state.settings.startingAccountSize;
+    }
+  }
+
+  /**
+   * Invalidate account cache (called when trades/cashflow change)
+   */
+  _invalidateAccountCache() {
+    this._accountCache.realizedPnL = null;
+    this._accountCache.currentSize = null;
+    this._accountCache.lastInvalidated = Date.now();
+  }
+
   // Settings methods
   updateSettings(updates) {
     Object.assign(this.state.settings, updates);
@@ -121,7 +204,18 @@ class AppState {
   // Account methods
   updateAccount(updates) {
     const oldAccount = { ...this.state.account };
-    Object.assign(this.state.account, updates);
+
+    // Only allow updating riskPercent and maxPositionPercent
+    // realizedPnL and currentSize are computed properties
+    const allowedUpdates = {};
+    if ('riskPercent' in updates) {
+      allowedUpdates.riskPercent = updates.riskPercent;
+    }
+    if ('maxPositionPercent' in updates) {
+      allowedUpdates.maxPositionPercent = updates.maxPositionPercent;
+    }
+
+    Object.assign(this.state.account, allowedUpdates);
     this.emit('accountChanged', { old: oldAccount, new: this.state.account });
   }
 
@@ -138,15 +232,14 @@ class AppState {
 
     if (type === 'deposit') {
       this.state.cashFlow.totalDeposits += amount;
-      this.state.account.currentSize += amount;
     } else if (type === 'withdrawal') {
       this.state.cashFlow.totalWithdrawals += amount;
-      this.state.account.currentSize -= amount;
     }
 
+    this._invalidateAccountCache();
     this.saveCashFlow();
     this.emit('cashFlowChanged', this.state.cashFlow);
-    this.emit('accountSizeChanged', this.state.account.currentSize);
+    this.emit('accountSizeChanged', this.currentSize);
     return transaction;
   }
 
@@ -160,15 +253,14 @@ class AppState {
     // Update totals
     if (deleted.type === 'deposit') {
       this.state.cashFlow.totalDeposits -= deleted.amount;
-      this.state.account.currentSize -= deleted.amount;
     } else if (deleted.type === 'withdrawal') {
       this.state.cashFlow.totalWithdrawals -= deleted.amount;
-      this.state.account.currentSize += deleted.amount;
     }
 
+    this._invalidateAccountCache();
     this.saveCashFlow();
     this.emit('cashFlowChanged', this.state.cashFlow);
-    this.emit('accountSizeChanged', this.state.account.currentSize);
+    this.emit('accountSizeChanged', this.currentSize);
 
     return deleted;
   }
@@ -197,6 +289,7 @@ class AppState {
       ...entry
     };
     this.state.journal.entries.unshift(newEntry);
+    this._invalidateAccountCache();
     this.saveJournal();
     this.emit('journalEntryAdded', newEntry);
     return newEntry;
@@ -206,6 +299,7 @@ class AppState {
     const entry = this.state.journal.entries.find(e => e.id === id);
     if (entry) {
       Object.assign(entry, updates);
+      this._invalidateAccountCache();
       this.saveJournal();
       this.emit('journalEntryUpdated', entry);
     }
@@ -216,6 +310,7 @@ class AppState {
     const index = this.state.journal.entries.findIndex(e => e.id === id);
     if (index > -1) {
       const deleted = this.state.journal.entries.splice(index, 1)[0];
+      this._invalidateAccountCache();
       this.saveJournal();
       this.emit('journalEntryDeleted', deleted);
       return deleted;
@@ -265,7 +360,7 @@ class AppState {
           dynamicAccountEnabled: parsed.dynamicAccountEnabled ?? true,
           theme: parsed.theme ?? 'dark'
         };
-        this.state.account.currentSize = this.state.settings.startingAccountSize;
+        // currentSize is now a computed property - no manual assignment needed
         this.state.account.riskPercent = this.state.settings.defaultRiskPercent;
         this.state.account.maxPositionPercent = this.state.settings.defaultMaxPositionPercent;
       }
@@ -293,17 +388,7 @@ class AppState {
       const saved = localStorage.getItem('riskCalcJournal');
       if (saved) {
         this.state.journal.entries = JSON.parse(saved);
-
-        // Calculate realized P&L from closed and trimmed trades
-        // Use totalRealizedPnL for trades with trim history, fallback to pnl for legacy
-        this.state.account.realizedPnL = this.state.journal.entries
-          .filter(t => (t.status === 'closed' || t.status === 'trimmed'))
-          .reduce((sum, t) => sum + (t.totalRealizedPnL ?? t.pnl ?? 0), 0);
-
-        // Include cash flow in account calculation (dynamic account tracking always enabled)
-        const netCashFlow = this.getCashFlowNet();
-        this.state.account.currentSize =
-          this.state.settings.startingAccountSize + this.state.account.realizedPnL + netCashFlow;
+        // realizedPnL and currentSize are now computed properties - no manual calculation needed
       }
     } catch (e) {
       console.error('Failed to load journal:', e);
@@ -334,10 +419,7 @@ class AppState {
           totalDeposits: parsed.totalDeposits || 0,
           totalWithdrawals: parsed.totalWithdrawals || 0
         };
-
-        // Apply cash flow to account size
-        const netCashFlow = this.state.cashFlow.totalDeposits - this.state.cashFlow.totalWithdrawals;
-        this.state.account.currentSize += netCashFlow;
+        // currentSize is now a computed property - no manual adjustment needed
       }
     } catch (e) {
       console.error('Failed to load cash flow:', e);
@@ -412,9 +494,73 @@ class AppState {
     }
   }
 
+  // Computed properties with caching
+  /**
+   * Computed property: Realized P&L from closed/trimmed trades
+   * Always calculated from journal entries, never stored
+   * Includes totalRealizedPnL from trimmed trades
+   */
+  get realizedPnL() {
+    // Check cache
+    if (this._accountCache.realizedPnL !== null && !this._needsRecalculation()) {
+      return this._accountCache.realizedPnL;
+    }
+
+    // Recalculate from trades
+    const pnl = this.state.journal.entries
+      .filter(t => (t.status === 'closed' || t.status === 'trimmed'))
+      .reduce((sum, t) => sum + (t.totalRealizedPnL ?? t.pnl ?? 0), 0);
+
+    // Update cache
+    this._accountCache.realizedPnL = pnl;
+    this._updateCacheDependencies();
+
+    return pnl;
+  }
+
+  /**
+   * Computed property: Current account size (realized balance)
+   * Formula: starting + realized P&L + net cash flow
+   * Does NOT include unrealized P&L (that's added for display only)
+   */
+  get currentSize() {
+    // Check cache
+    if (this._accountCache.currentSize !== null && !this._needsRecalculation()) {
+      return this._accountCache.currentSize;
+    }
+
+    try {
+      // Recalculate
+      const netCashFlow = this.getCashFlowNet();
+      const size = this.state.settings.startingAccountSize + this.realizedPnL + netCashFlow;
+
+      // Update cache
+      this._accountCache.currentSize = size;
+
+      return size;
+    } catch (error) {
+      console.error('Error calculating currentSize:', error);
+      // Fallback: return starting balance + realized P&L (no cash flow)
+      return this.state.settings.startingAccountSize + this.realizedPnL;
+    }
+  }
+
   // Getters
   get settings() { return this.state.settings; }
-  get account() { return this.state.account; }
+  get account() {
+    // Cache Proxy instance to fix identity comparison (state.account === state.account)
+    if (!this._accountProxy) {
+      const self = this;
+      this._accountProxy = new Proxy(this.state.account, {
+        get(target, prop) {
+          if (prop === 'realizedPnL') return self.realizedPnL;
+          if (prop === 'currentSize') return self.currentSize;
+          return target[prop];
+        }
+      });
+    }
+    return this._accountProxy;
+  }
   get cashFlow() { return this.state.cashFlow; }
   get trade() { return this.state.trade; }
   get results() { return this.state.results; }

@@ -47,11 +47,23 @@ class EquityCurveManager {
       // Check for incomplete days and backfill
       await this._backfillIncompleteDays();
 
-      // Find missing days in EOD cache
-      const missingDays = eodCacheManager.findMissingDays(startDate, endDate);
+      // Check for stale cache BEFORE finding missing days
+      // If we have open trades but cached data shows 0 unrealized P&L, cache is stale
+      if (state.journal.entries.some(t => t.status === 'open' || t.status === 'trimmed')) {
+        const sampleDate = startDate;
+        const cachedData = eodCacheManager.getEODData(sampleDate);
+
+        if (cachedData && cachedData.unrealizedPnL === 0) {
+          console.warn('[EquityCurve] Stale cache detected, clearing and refetching...');
+          localStorage.removeItem('eodCache');
+        }
+      }
+
+      // Find missing days in EOD cache (after potential cache clear)
+      let missingDays = eodCacheManager.findMissingDays(startDate, endDate);
 
       if (missingDays.length > 0) {
-        console.log(`[EquityCurve] Found ${missingDays.length} days without EOD data`);
+        console.log(`[EquityCurve] Fetching historical prices for ${missingDays.length} days`);
         await this._fillMissingEODData(missingDays);
       }
 

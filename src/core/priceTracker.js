@@ -13,6 +13,8 @@ export const priceTracker = {
   apiKey: null,
   cache: new Map(),
   lastFetchDate: null,
+  _fetchInProgress: false,
+  _fetchPromise: null,
 
   init() {
     // Load API key from settings
@@ -339,6 +341,25 @@ export const priceTracker = {
     }
 
     return await this.fetchPrices(tickers);
+  },
+
+  /**
+   * Fetch active prices with race condition guard
+   * Deduplicates concurrent requests by returning same promise
+   */
+  async fetchActivePrices() {
+    // Return existing fetch if already in progress
+    if (this._fetchInProgress) {
+      return this._fetchPromise;
+    }
+
+    this._fetchInProgress = true;
+    this._fetchPromise = this.refreshAllActivePrices().finally(() => {
+      this._fetchInProgress = false;
+      this._fetchPromise = null;
+    });
+
+    return this._fetchPromise;
   },
 
   getPrice(ticker) {

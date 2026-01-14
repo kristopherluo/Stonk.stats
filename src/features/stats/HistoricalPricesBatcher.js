@@ -309,12 +309,46 @@ class HistoricalPricesBatcher {
 
   /**
    * Save cache to localStorage
+   * Automatically cleans up old data if quota exceeded
    */
   saveCache() {
     try {
       localStorage.setItem('historicalPriceCache', JSON.stringify(this.cache));
     } catch (error) {
-      console.error('Failed to save historical price cache:', error);
+      // If quota exceeded, clean up old data and retry
+      if (error.name === 'QuotaExceededError') {
+        console.warn('[HistoricalPrices] Storage quota exceeded, cleaning up old data...');
+
+        // Import state to get trades for cleanup
+        import('../../core/state.js').then(({ state }) => {
+          const removedCount = this.cleanupOldData(state.journal.entries);
+
+          if (removedCount > 0) {
+            console.log(`[HistoricalPrices] Removed ${removedCount} old data points, retrying save...`);
+            try {
+              localStorage.setItem('historicalPriceCache', JSON.stringify(this.cache));
+              console.log('[HistoricalPrices] Cache saved successfully after cleanup');
+            } catch (retryError) {
+              console.error('[HistoricalPrices] Still cannot save cache after cleanup:', retryError);
+              // Last resort: clear entire cache
+              console.warn('[HistoricalPrices] Clearing entire historical price cache...');
+              this.cache = {};
+              localStorage.removeItem('historicalPriceCache');
+            }
+          } else {
+            // No old data to remove, cache is just too large
+            console.error('[HistoricalPrices] No old data to clean up, cache size is too large');
+            // Clear entire cache as last resort
+            console.warn('[HistoricalPrices] Clearing entire historical price cache...');
+            this.cache = {};
+            localStorage.removeItem('historicalPriceCache');
+          }
+        }).catch(err => {
+          console.error('[HistoricalPrices] Error during cleanup:', err);
+        });
+      } else {
+        console.error('Failed to save historical price cache:', error);
+      }
     }
   }
 

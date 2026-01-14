@@ -35,8 +35,30 @@ class App {
     // Initialize price tracker
     priceTracker.init();
 
-    // Update account display after price cache is loaded
-    settings.updateAccountDisplay(state.account.currentSize);
+    // Auto-fetch prices on load if we have open trades and cache is empty/stale
+    const openTrades = state.journal.entries.filter(t => t.status === 'open' || t.status === 'trimmed');
+    const hasOpenTrades = openTrades.length > 0;
+    const hasCachedPrices = priceTracker.cache.size > 0;
+
+    if (hasOpenTrades && !hasCachedPrices) {
+      // Show loading indicator on header
+      settings.setAccountLoading(true);
+
+      // Fetch prices for open positions
+      priceTracker.fetchActivePrices()
+        .then(() => {
+          settings.setAccountLoading(false);
+          settings.updateAccountDisplay(state.account.currentSize);
+        })
+        .catch((error) => {
+          console.error('Failed to fetch prices on load:', error);
+          settings.setAccountLoading(false);
+          settings.updateAccountDisplay(state.account.currentSize);
+        });
+    } else {
+      // Update account display with cached prices
+      settings.updateAccountDisplay(state.account.currentSize);
+    }
 
     // Initialize theme after settings are loaded (so it doesn't overwrite saved settings)
     theme.init();

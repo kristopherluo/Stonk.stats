@@ -40,19 +40,6 @@ export const dataManager = {
       }
     };
 
-    console.log('Exporting data:', {
-      version: data.version,
-      tradesCount: data.journal.length,
-      startingBalance: data.settings.startingAccountSize,
-      realizedPnL: data.account.realizedPnL,
-      cashFlowNet: data.cashFlow.totalDeposits - data.cashFlow.totalWithdrawals,
-      apiKeys: {
-        finnhub: !!data.apiKeys.finnhub,
-        twelveData: !!data.apiKeys.twelveData,
-        alphaVantage: !!data.apiKeys.alphaVantage
-      }
-    });
-
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -64,7 +51,6 @@ export const dataManager = {
     URL.revokeObjectURL(url);
 
     showToast('📥 Data exported successfully', 'success');
-    console.log(`Data exported: ${data.journal.length} trades`);
   },
 
   importData() {
@@ -114,24 +100,12 @@ export const dataManager = {
             localStorage.setItem('alphaVantageApiKey', '');
           }
 
-          console.log(`Data imported: ${data.journal.length} trades from backup (version ${data.version || 1})`);
-          console.log('API Keys imported:', {
-            finnhub: !!(data.apiKeys?.finnhub),
-            twelveData: !!(data.apiKeys?.twelveData),
-            alphaVantage: !!(data.apiKeys?.alphaVantage)
-          });
-
-          // Warn about missing data in older versions
-          if (!data.version || data.version < 3) {
-            console.warn('⚠️ Imported from older backup version. TwelveData API key not in backup - you may need to re-enter it.');
-          }
-
           showToast(`📤 Imported ${data.journal.length} trades - Reloading...`, 'success');
 
           // Reload page after short delay to ensure all localStorage writes complete
           setTimeout(() => {
             window.location.reload();
-          }, 500);
+          }, 1500);
         } catch (err) {
           console.error('Import error:', err);
           showToast('❌ Failed to import data', 'error');
@@ -154,6 +128,9 @@ export const dataManager = {
     localStorage.removeItem('riskCalcJournalMeta');
     localStorage.removeItem('riskCalcCashFlow');
     localStorage.removeItem('historicalPriceCache');
+    localStorage.removeItem('eodCache'); // EOD cache for equity curve
+    localStorage.removeItem('companyDataCache'); // Company profile cache
+    localStorage.removeItem('chartDataCache'); // TradingView chart cache
 
     // Clear API keys from localStorage
     localStorage.removeItem('finnhubApiKey');

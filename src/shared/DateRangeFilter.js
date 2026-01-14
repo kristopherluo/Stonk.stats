@@ -5,6 +5,7 @@
 
 import { state } from '../core/state.js';
 import { getCurrentWeekday } from '../core/utils.js';
+import * as marketHours from '../utils/marketHours.js';
 
 export class DateRangeFilter {
   constructor() {
@@ -15,13 +16,10 @@ export class DateRangeFilter {
   }
 
   /**
-   * Format date as YYYY-MM-DD
+   * Format date as YYYY-MM-DD using UTC (consistent with EquityCurveManager)
    */
   formatDate(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return marketHours.formatDate(date);
   }
 
   /**

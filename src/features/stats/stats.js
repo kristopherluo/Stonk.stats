@@ -581,8 +581,6 @@ class Stats {
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
-      console.log('Equity curve data points:', curveData.length);
-
       this.chart.setData(curveData);
       this.chart.render();
 

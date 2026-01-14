@@ -167,19 +167,17 @@ class Calculator {
             const newLength = e.target.value.length;
             const newCursorPosition = Math.max(0, cursorPosition + (newLength - originalLength));
             e.target.setSelectionRange(newCursorPosition, newCursorPosition);
-            // Update state and displays with converted value
-            state.updateAccount({ currentSize: converted });
-            state.emit('accountSizeChanged', converted);
+            // currentSize is now a computed property - cannot be directly updated
+            // To change account size, use Settings panel to adjust starting balance
+            state.emit('accountSizeChanged', state.currentSize);
           }
         }
         this.calculate();
       });
       accountSize.addEventListener('blur', (e) => {
-        const num = parseNumber(e.target.value);
-        if (num !== null) {
-          e.target.value = formatWithCommas(num);
-          state.emit('accountSizeChanged', num);
-        }
+        // Reset to computed value on blur
+        e.target.value = formatWithCommas(state.currentSize);
+        state.emit('accountSizeChanged', state.currentSize);
       });
     }
 
@@ -370,9 +368,8 @@ class Calculator {
     const target = parseNumber(this.elements.targetPrice?.value);
     const maxPositionPercent = parseNumber(this.elements.maxPositionPercent?.value) || state.account.maxPositionPercent;
 
-    // Update state
+    // Update state (currentSize is computed property, only update riskPercent)
     state.updateAccount({
-      currentSize: accountSize || state.settings.startingAccountSize,
       riskPercent: riskPercent || state.settings.defaultRiskPercent
     });
 
