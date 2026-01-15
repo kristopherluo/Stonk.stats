@@ -256,136 +256,118 @@ class EquityCurveManager {
     const todayStr = marketHours.formatDate(new Date());
 
     for (const dateStr of businessDays) {
-      // Special handling for today: use current prices instead of cached EOD
-      if (dateStr === todayStr) {
-        // FIX: Check if we have prices before building today's point
-        // Skip today if cache is empty (prevents showing artificial cliff drop with $0 unrealized P&L)
-        const activeTrades = state.journal.entries.filter(t => t.status === 'open' || t.status === 'trimmed');
-
-        if (activeTrades.length > 0 && priceTracker.cache.size === 0) {
-          console.warn('[EquityCurve] Skipping today\'s point - price cache empty for active trades');
-          continue; // Skip today, use yesterday's point as latest
-        }
-
-        const currentBalance = this._calculateCurrentBalance();
-
-        if (currentBalance !== null) {
-          curve[dateStr] = {
-            balance: currentBalance.balance,
-            realizedBalance: currentBalance.realizedBalance,
-            unrealizedPnL: currentBalance.unrealizedPnL,
-            dayPnL: accountBalanceCalculator.calculateDayPnL(state.journal.entries, dateStr),
-            cashFlow: currentBalance.cashFlow
-          };
-          continue;
-        }
-      }
-
-      // For past dates: use EOD cache
-      const eodData = eodCacheManager.getEODData(dateStr);
-
-      if (eodData && !eodData.incomplete) {
-        curve[dateStr] = {
-          balance: eodData.balance,
-          realizedBalance: eodData.realizedBalance,
-          unrealizedPnL: eodData.unrealizedPnL,
-          dayPnL: accountBalanceCalculator.calculateDayPnL(state.journal.entries, dateStr),
-          cashFlow: eodData.cashFlow
-        };
-      } else {
-        // Missing or incomplete data - skip this point
-        // (This shouldn't happen if _fillMissingEODData worked correctly)
-        console.warn(`[EquityCurve] Missing or incomplete EOD data for ${dateStr}`);
+      const point = this._getCurvePointForDate(dateStr, todayStr);
+      if (point) {
+        curve[dateStr] = point;
       }
     }
 
-    // FIX: Ensure we have at least 2 points for chart rendering
-    // If curve is empty or has only 1 point, add fallback points
-    const curveSize = Object.keys(curve).length;
-    console.log(`[EquityCurve] Curve has ${curveSize} points before fallback`);
+    // Ensure minimum 2 points for chart rendering
+    this._ensureMinimumCurvePoints(curve, startDate, todayStr);
 
-    if (curveSize < 2 && startDate) {
-      const startingBalance = state.settings.startingAccountSize;
-
-      // Add starting point if it doesn't exist
-      if (!curve[startDate]) {
-        console.log(`[EquityCurve] Adding fallback start point at ${startDate}`);
-        curve[startDate] = {
-          balance: startingBalance,
-          realizedBalance: startingBalance,
-          unrealizedPnL: 0,
-          dayPnL: 0,
-          cashFlow: 0
-        };
-      }
-
-      // Add second point if we still need one
-      if (Object.keys(curve).length < 2) {
-        // If startDate === todayStr (first trade today), use calculated balance for "now"
-        // Otherwise try to add today's point
-        if (todayStr === startDate) {
-          // First trade was today - use current balance for second point
-          // Use a timestamp suffix to differentiate from start-of-day point
-          const nowKey = `${todayStr}_current`;
-          const currentBalance = this._calculateCurrentBalance();
-
-          if (currentBalance !== null) {
-            console.log(`[EquityCurve] Adding fallback current point at ${nowKey}`);
-            // Use the todayStr key (not nowKey) to show as today's point
-            // but override the start-of-day values
-            curve[todayStr] = {
-              balance: currentBalance.balance,
-              realizedBalance: currentBalance.realizedBalance,
-              unrealizedPnL: currentBalance.unrealizedPnL,
-              dayPnL: accountBalanceCalculator.calculateDayPnL(state.journal.entries, todayStr),
-              cashFlow: currentBalance.cashFlow
-            };
-          } else {
-            // Can't calculate current balance - use starting balance for second point too
-            console.warn('[EquityCurve] Cannot calculate current balance, adding duplicate start point');
-            const nextDay = new Date(startDate);
-            nextDay.setDate(nextDay.getDate() + 1);
-            const nextDayStr = marketHours.formatDate(nextDay);
-            curve[nextDayStr] = {
-              balance: startingBalance,
-              realizedBalance: startingBalance,
-              unrealizedPnL: 0,
-              dayPnL: 0,
-              cashFlow: 0
-            };
-          }
-        } else {
-          // Try to add today's point
-          const currentBalance = this._calculateCurrentBalance();
-          if (currentBalance !== null && !curve[todayStr]) {
-            console.log(`[EquityCurve] Adding fallback today point at ${todayStr}`);
-            curve[todayStr] = {
-              balance: currentBalance.balance,
-              realizedBalance: currentBalance.realizedBalance,
-              unrealizedPnL: currentBalance.unrealizedPnL,
-              dayPnL: accountBalanceCalculator.calculateDayPnL(state.journal.entries, todayStr),
-              cashFlow: currentBalance.cashFlow
-            };
-          } else {
-            // Can't add today - add tomorrow with starting balance
-            console.warn('[EquityCurve] Cannot add today point, adding next day fallback');
-            const nextDay = new Date(startDate);
-            nextDay.setDate(nextDay.getDate() + 1);
-            const nextDayStr = marketHours.formatDate(nextDay);
-            curve[nextDayStr] = {
-              balance: startingBalance,
-              realizedBalance: startingBalance,
-              unrealizedPnL: 0,
-              dayPnL: 0,
-              cashFlow: 0
-            };
-          }
-        }
-      }
-    }
-
-    console.log(`[EquityCurve] Curve has ${Object.keys(curve).length} points after fallback`);
     return curve;
+  }
+
+  /**
+   * Get curve point for a specific date
+   * Returns null if data unavailable
+   */
+  _getCurvePointForDate(dateStr, todayStr) {
+    // Today: use current prices
+    if (dateStr === todayStr) {
+      // Skip if we have active trades but no price data (prevents $0 unrealized P&L)
+      const activeTrades = state.journal.entries.filter(t => t.status === 'open' || t.status === 'trimmed');
+      if (activeTrades.length > 0 && priceTracker.cache.size === 0) {
+        return null;
+      }
+
+      const currentBalance = this._calculateCurrentBalance();
+      if (!currentBalance) return null;
+
+      return this._createCurvePoint(
+        currentBalance.balance,
+        currentBalance.realizedBalance,
+        currentBalance.unrealizedPnL,
+        currentBalance.cashFlow,
+        dateStr
+      );
+    }
+
+    // Past dates: use EOD cache
+    const eodData = eodCacheManager.getEODData(dateStr);
+    if (!eodData || eodData.incomplete) {
+      return null;
+    }
+
+    return this._createCurvePoint(
+      eodData.balance,
+      eodData.realizedBalance,
+      eodData.unrealizedPnL,
+      eodData.cashFlow,
+      dateStr
+    );
+  }
+
+  /**
+   * Create a curve point object
+   */
+  _createCurvePoint(balance, realizedBalance, unrealizedPnL, cashFlow, dateStr) {
+    return {
+      balance,
+      realizedBalance,
+      unrealizedPnL,
+      dayPnL: accountBalanceCalculator.calculateDayPnL(state.journal.entries, dateStr),
+      cashFlow
+    };
+  }
+
+  /**
+   * Ensure curve has at least 2 points for chart rendering
+   * Adds synthetic points if needed
+   */
+  _ensureMinimumCurvePoints(curve, startDate, todayStr) {
+    if (Object.keys(curve).length >= 2) return;
+
+    const startingBalance = state.settings.startingAccountSize;
+
+    // Add starting point
+    if (!curve[startDate]) {
+      curve[startDate] = this._createCurvePoint(startingBalance, startingBalance, 0, 0, startDate);
+    }
+
+    // Add second point if still needed
+    if (Object.keys(curve).length < 2) {
+      const secondDate = this._getSecondPointDate(startDate, todayStr);
+      const currentBalance = this._calculateCurrentBalance();
+
+      if (currentBalance && secondDate === todayStr) {
+        curve[secondDate] = this._createCurvePoint(
+          currentBalance.balance,
+          currentBalance.realizedBalance,
+          currentBalance.unrealizedPnL,
+          currentBalance.cashFlow,
+          secondDate
+        );
+      } else {
+        // Fallback: use starting balance for second point
+        curve[secondDate] = this._createCurvePoint(startingBalance, startingBalance, 0, 0, secondDate);
+      }
+    }
+  }
+
+  /**
+   * Determine the date for the second curve point
+   */
+  _getSecondPointDate(startDate, todayStr) {
+    // If first trade is today, use today for second point
+    if (startDate === todayStr) {
+      return todayStr;
+    }
+
+    // Otherwise use next business day after start
+    const nextDay = new Date(startDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    return marketHours.formatDate(nextDay);
   }
 
   /**

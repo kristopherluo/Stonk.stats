@@ -260,7 +260,7 @@ class HistoricalPricesBatcher {
   getPriceOnDate(ticker, date) {
     if (!this.cache[ticker]) return null;
 
-    const dateStr = formatDate(date);
+    const dateStr = typeof date === 'string' ? date : formatDate(date);
 
     // Try exact match first
     if (this.cache[ticker][dateStr]) {
