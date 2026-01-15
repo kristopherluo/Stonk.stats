@@ -299,6 +299,37 @@ class EquityCurveManager {
       }
     }
 
+    // FIX: Ensure we have at least 2 points for chart rendering
+    // If curve is empty or has only 1 point, add starting point
+    if (Object.keys(curve).length < 2 && startDate) {
+      const startingBalance = state.settings.startingAccountSize;
+
+      // Add starting point if it doesn't exist
+      if (!curve[startDate]) {
+        curve[startDate] = {
+          balance: startingBalance,
+          realizedBalance: startingBalance,
+          unrealizedPnL: 0,
+          dayPnL: 0,
+          cashFlow: 0
+        };
+      }
+
+      // Add today's point if we still need one more
+      if (Object.keys(curve).length < 2 && todayStr !== startDate) {
+        const currentBalance = this._calculateCurrentBalance();
+        if (currentBalance !== null && !curve[todayStr]) {
+          curve[todayStr] = {
+            balance: currentBalance.balance,
+            realizedBalance: currentBalance.realizedBalance,
+            unrealizedPnL: currentBalance.unrealizedPnL,
+            dayPnL: accountBalanceCalculator.calculateDayPnL(state.journal.entries, todayStr),
+            cashFlow: currentBalance.cashFlow
+          };
+        }
+      }
+    }
+
     return curve;
   }
 

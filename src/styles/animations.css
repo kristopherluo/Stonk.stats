@@ -737,6 +737,18 @@ html.theme-transitioning *::after {
   }
 }
 
+/* === Flow Animations === */
+
+@keyframes summaryBarFlow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes riskBarFlow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
 /* === Reduced Motion === */
 
 @media (prefers-reduced-motion: reduce) {

@@ -290,3 +290,70 @@
 .preset-custom .input-wrapper {
   flex: 1;
 }
+
+/* === Filter Buttons === */
+
+.filter-btn {
+  padding: var(--space-2) var(--space-4);
+  border: 1.5px solid rgba(96, 165, 250, 0.3);
+  border-radius: var(--border-radius);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.08) 0%, transparent 70%),
+    linear-gradient(145deg, #0a0a0a 0%, #000000 100%);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.6),
+    inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  text-shadow: 0 0 8px rgba(96, 165, 250, 0.3);
+}
+
+.filter-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.filter-btn:hover::before {
+  left: 100%;
+}
+
+.filter-btn:hover {
+  border-color: rgba(96, 165, 250, 0.6);
+  color: var(--primary);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.15) 0%, transparent 70%),
+    linear-gradient(145deg, #0f0f0f 0%, #000000 100%);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.7),
+    0 0 20px rgba(59, 130, 246, 0.3),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  text-shadow: 0 0 12px rgba(96, 165, 250, 0.6);
+  transform: translateY(-1px);
+}
+
+.filter-btn--active {
+  border-color: rgba(96, 165, 250, 0.8);
+  color: var(--primary);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.2) 0%, transparent 70%),
+    linear-gradient(145deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.7),
+    0 0 24px rgba(59, 130, 246, 0.4),
+    inset 0 0 16px rgba(59, 130, 246, 0.15),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  text-shadow: 0 0 16px rgba(96, 165, 250, 0.8);
+}

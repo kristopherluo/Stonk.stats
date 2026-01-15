@@ -240,3 +240,74 @@ a:focus-visible {
   color: var(--danger);
   text-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
 }
+
+/* === Text Glow Utilities === */
+
+.text-glow-blue {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.6),
+    0 0 16px rgba(96, 165, 250, 0.3);
+}
+
+.text-glow-blue-strong {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.8),
+    0 0 16px rgba(96, 165, 250, 0.5),
+    0 0 24px rgba(96, 165, 250, 0.3);
+}
+
+.text-glow-success {
+  text-shadow:
+    0 0 8px rgba(34, 197, 94, 0.6),
+    0 0 16px rgba(34, 197, 94, 0.3);
+}
+
+.text-glow-success-strong {
+  text-shadow:
+    0 0 10px rgba(34, 197, 94, 0.6),
+    0 0 20px rgba(34, 197, 94, 0.3);
+}
+
+.text-glow-danger {
+  text-shadow:
+    0 0 8px rgba(239, 68, 68, 0.6),
+    0 0 16px rgba(239, 68, 68, 0.3);
+}
+
+.text-glow-warning {
+  text-shadow:
+    0 0 8px rgba(245, 158, 11, 0.6),
+    0 0 16px rgba(245, 158, 11, 0.3);
+}
+
+.text-glow-purple {
+  text-shadow:
+    0 0 8px rgba(139, 92, 246, 0.5),
+    0 0 16px rgba(139, 92, 246, 0.25);
+}
+
+.text-glow-white {
+  text-shadow:
+    0 0 8px rgba(255, 255, 255, 0.5),
+    0 0 16px rgba(255, 255, 255, 0.25);
+}
+
+/* === Ticker Gradient Utility === */
+
+.ticker-gradient {
+  font-family: var(--font-mono);
+  font-weight: var(--font-bold);
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 60%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.05em;
+  filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.5));
+  animation: tickerShimmer 3s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+
+@keyframes tickerShimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
