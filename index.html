@@ -397,9 +397,10 @@
             <tr>
               <th data-sort="date" class="sortable">Date</th>
               <th data-sort="ticker" class="sortable">Ticker</th>
+              <th>Option</th>
               <th data-sort="entry" class="sortable">Entry</th>
               <th>Exit</th>
-              <th>Shares</th>
+              <th>Shares/Cons</th>
               <th>Position %</th>
               <th data-sort="pnl" class="sortable">P&L ($)</th>
               <th>P&L %</th>
@@ -1319,6 +1320,10 @@
           <div class="wizard-confirmation__ticker" id="wizardConfirmTicker">TICKER</div>
 
           <div class="wizard-confirmation__details">
+            <div class="wizard-confirmation__row" id="wizardConfirmOptionRow" style="display: none;">
+              <span class="wizard-confirmation__label">Option</span>
+              <span class="wizard-confirmation__value" id="wizardConfirmOption">—</span>
+            </div>
             <div class="wizard-confirmation__row">
               <span class="wizard-confirmation__label">Position</span>
               <span class="wizard-confirmation__value" id="wizardConfirmPosition">0 shares @ $0.00</span>

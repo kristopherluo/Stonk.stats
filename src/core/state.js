@@ -406,10 +406,36 @@ class AppState {
       if (entries) {
         // Decompress notes after loading
         this.state.journal.entries = entries.map(trade => decompressTradeNotes(trade));
+        // Migrate trades to add options fields if missing
+        this._migrateTradesForOptions();
         // realizedPnL and currentSize are now computed properties - no manual calculation needed
       }
     } catch (e) {
       console.error('Failed to load journal:', e);
+    }
+  }
+
+  /**
+   * Migrate existing trades to include options fields
+   * Adds assetType, strike, expirationDate, optionType, premium with default values
+   */
+  _migrateTradesForOptions() {
+    let migrated = 0;
+    this.state.journal.entries.forEach(trade => {
+      if (!trade.assetType) {
+        // Default to 'stock' for existing trades
+        trade.assetType = 'stock';
+        trade.strike = null;
+        trade.expirationDate = null;
+        trade.optionType = null;
+        trade.premium = null;
+        migrated++;
+      }
+    });
+
+    if (migrated > 0) {
+      console.log(`[State] Migrated ${migrated} trades to include options fields`);
+      this.saveJournal(); // Save migrated data
     }
   }
 

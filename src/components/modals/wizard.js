@@ -202,6 +202,8 @@ class TradeWizard {
       // Step 3 - Confirmation
       confirmTicker: document.getElementById('wizardConfirmTicker'),
       confirmPosition: document.getElementById('wizardConfirmPosition'),
+      confirmOptionRow: document.getElementById('wizardConfirmOptionRow'),
+      confirmOption: document.getElementById('wizardConfirmOption'),
       confirmRisk: document.getElementById('wizardConfirmRisk'),
       confirmPositionSize: document.getElementById('wizardConfirmPositionSize'),
       confirmDate: document.getElementById('wizardConfirmDate'),
@@ -239,6 +241,14 @@ class TradeWizard {
         } else {
           this.nextStep();
         }
+      }
+    });
+
+    // Step 1 buttons
+    this.elements.cancel1Btn?.addEventListener('click', () => this.close());
+    this.elements.next1Btn?.addEventListener('click', async () => {
+      if (await this.validateStep1()) {
+        this.goToStep(2);
       }
     });
 
@@ -721,6 +731,21 @@ class TradeWizard {
         );
         return false;
       }
+
+      // Validate expiration date is on or after trade date
+      if (expirationDate && tradeDate) {
+        const expDate = new Date(expirationDate + 'T00:00:00');
+        const tDate = new Date(tradeDate + 'T00:00:00');
+
+        if (expDate < tDate) {
+          this.showInputError(
+            this.elements.wizardExpirationDate,
+            this.elements.wizardExpirationDateError,
+            'Expiration date cannot be before trade date'
+          );
+          return false;
+        }
+      }
     }
 
     // Validate shares/contracts (required)
@@ -961,11 +986,20 @@ class TradeWizard {
     const ticker = this.elements.wizardTicker?.value.trim() || '';
     const entry = parseFloat(this.elements.wizardEntryPrice?.value) || 0;
     const shares = parseInt(this.elements.wizardShares?.value) || 0;
-    const riskPerShare = entry - (parseFloat(this.elements.wizardStopLoss?.value) || 0);
-    const riskDollars = shares * riskPerShare;
+    const stop = parseFloat(this.elements.wizardStopLoss?.value) || 0;
+    const riskPerShare = entry - stop;
+
+    // Determine if this is an options trade
+    const assetTypeBtn = document.querySelector('#assetTypeToggle .toggle-switch__option.active');
+    const assetType = assetTypeBtn?.dataset.assetType || 'stock';
+    const isOptions = assetType === 'options';
+
+    // For options, account for 100 shares per contract
+    const multiplier = isOptions ? 100 : 1;
+    const riskDollars = shares * riskPerShare * multiplier;
     const riskPercent = (riskDollars / state.account.currentSize) * 100;
 
-    // Update ticker display
+    // Update ticker display - just ticker for both stocks and options
     if (this.elements.confirmTicker) {
       this.elements.confirmTicker.textContent = ticker || 'No Ticker';
       this.elements.confirmTicker.classList.toggle('wizard-confirmation__ticker--empty', !ticker);
@@ -973,7 +1007,40 @@ class TradeWizard {
 
     // Update position display
     if (this.elements.confirmPosition) {
-      this.elements.confirmPosition.textContent = `${formatNumber(shares)} shares @ ${formatCurrency(entry)}`;
+      if (isOptions) {
+        // Simple format for options: "5 contracts @ $2.15"
+        this.elements.confirmPosition.textContent = `${formatNumber(shares)} contracts @ ${formatCurrency(entry)}`;
+      } else {
+        this.elements.confirmPosition.textContent = `${formatNumber(shares)} shares @ ${formatCurrency(entry)}`;
+      }
+    }
+
+    // Update option row (only visible for options trades)
+    if (isOptions) {
+      const strike = parseFloat(this.elements.wizardStrikePrice?.value) || 0;
+      const expirationDate = this.elements.wizardExpirationDate?.value || '';
+      const optionTypeBtn = document.querySelector('#optionTypeToggle .toggle-switch__option.active');
+      const optionType = optionTypeBtn?.dataset.optionType || 'call';
+      const optionSymbol = optionType === 'call' ? 'C' : 'P';
+
+      // Format expiration date as "Jan 16, 2026"
+      let formattedExp = '';
+      if (expirationDate) {
+        const expDate = new Date(expirationDate + 'T00:00:00');
+        formattedExp = expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+
+      if (this.elements.confirmOptionRow) {
+        this.elements.confirmOptionRow.style.display = 'flex';
+      }
+      if (this.elements.confirmOption) {
+        this.elements.confirmOption.textContent = `${strike}${optionSymbol} ${formattedExp}`;
+      }
+    } else {
+      // Hide option row for stock trades
+      if (this.elements.confirmOptionRow) {
+        this.elements.confirmOptionRow.style.display = 'none';
+      }
     }
 
     // Update risk display
@@ -983,7 +1050,7 @@ class TradeWizard {
 
     // Update position size display
     if (this.elements.confirmPositionSize) {
-      const positionSize = entry * shares;
+      const positionSize = entry * shares * multiplier;
       const positionPercent = (positionSize / state.account.currentSize) * 100;
       this.elements.confirmPositionSize.textContent = `${formatCurrency(positionSize)} (${formatPercent(positionPercent)})`;
     }
@@ -1080,6 +1147,27 @@ class TradeWizard {
     // Get timestamp from trade date
     const timestamp = createTimestampFromDateInput(tradeDate);
 
+    // Determine asset type from UI toggle
+    const assetTypeBtn = document.querySelector('#assetTypeToggle .toggle-switch__option.active');
+    const assetType = assetTypeBtn?.dataset.assetType || 'stock';
+
+    // Capture options fields if in options mode
+    let strike = null;
+    let expirationDate = null;
+    let optionType = null;
+    let premium = null;
+
+    if (assetType === 'options') {
+      strike = parseFloat(this.elements.wizardStrikePrice?.value) || null;
+      expirationDate = this.elements.wizardExpirationDate?.value || null;
+
+      const optionTypeBtn = document.querySelector('#optionTypeToggle .toggle-switch__option.active');
+      optionType = optionTypeBtn?.dataset.optionType || 'call';
+
+      // Premium is the entry price for options
+      premium = entryPrice;
+    }
+
     // Build journal entry
     const journalEntry = {
       timestamp,
@@ -1096,6 +1184,13 @@ class TradeWizard {
       stopDistance,
       notes: this.notes || '',
       status: 'open',
+
+      // Options fields
+      assetType,
+      strike,
+      expirationDate,
+      optionType,
+      premium,
 
       // Thesis data
       thesis: this.hasThesisData() ? { ...this.thesis } : null,

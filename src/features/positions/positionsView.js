@@ -301,7 +301,7 @@ class PositionsView {
     return positions;
   }
 
-  render() {
+  async render() {
     const positions = this.getFilteredPositions();
 
     // Update count to show filtered positions
@@ -320,7 +320,7 @@ class PositionsView {
       this.showEmptyState();
     } else {
       this.hideEmptyState();
-      this.renderGrid(positions);
+      await this.renderGrid(positions);
     }
   }
 
@@ -434,16 +434,58 @@ class PositionsView {
     }
   }
 
-  renderGrid(positions) {
+  async renderGrid(positions) {
     if (!this.elements.grid) return;
 
     const shouldAnimate = !this.hasAnimated;
     this.hasAnimated = true;
 
+    // Fetch all company data upfront with rate limiting
+    const companyDataMap = new Map();
+
+    // Get unique tickers to avoid duplicate fetches
+    const uniqueTickers = [...new Set(positions.map(t => t.ticker))];
+
+    // Fetch with rate limiting (200ms delay between requests to avoid API limits)
+    for (const ticker of uniqueTickers) {
+      let data = await priceTracker.getCachedCompanyData(ticker);
+
+      // If we have data but it's missing industry (only has summary from Alpha Vantage),
+      // fetch the full profile from Finnhub
+      if (data && !data.industry) {
+        console.log(`[Positions] ${ticker} has summary but no industry, fetching profile...`);
+        const profile = await priceTracker.fetchCompanyProfile(ticker);
+        if (profile) {
+          data = profile;
+        }
+        await new Promise(resolve => setTimeout(resolve, 200)); // Rate limit delay
+      } else if (!data) {
+        // No data at all, try to fetch profile
+        console.log(`[Positions] No data for ${ticker}, fetching profile...`);
+        const profile = await priceTracker.fetchCompanyProfile(ticker);
+        if (profile) {
+          data = profile;
+        }
+        await new Promise(resolve => setTimeout(resolve, 200)); // Rate limit delay
+      }
+
+      console.log(`[Positions] Final company data for ${ticker}:`, data);
+      if (data && data.industry) {
+        companyDataMap.set(ticker, data);
+      }
+    }
+
+    console.log(`[Positions] Company data map with industry: ${companyDataMap.size}`);
+
     this.elements.grid.innerHTML = positions.map(trade => {
+      const isOptions = trade.assetType === 'options';
       const shares = trade.remainingShares ?? trade.shares;
       const riskPerShare = trade.entry - trade.stop;
-      const grossRisk = shares * riskPerShare;
+
+      // For options, multiply by 100 (contract multiplier)
+      const multiplier = isOptions ? 100 : 1;
+      const grossRisk = shares * riskPerShare * multiplier;
+
       const isTrimmed = trade.status === 'trimmed';
       const realizedPnL = trade.totalRealizedPnL || 0;
 
@@ -451,8 +493,8 @@ class PositionsView {
       const netRisk = isTrimmed ? Math.max(0, grossRisk - realizedPnL) : grossRisk;
       const riskPercent = (netRisk / state.account.currentSize) * 100;
 
-      // Get price data from tracker
-      const pnlData = priceTracker.calculateUnrealizedPnL(trade);
+      // Get price data from tracker (skip for options - no live pricing yet)
+      const pnlData = isOptions ? null : priceTracker.calculateUnrealizedPnL(trade);
 
       // Determine status
       let statusClass = trade.status;
@@ -460,8 +502,11 @@ class PositionsView {
 
       // Get trade metadata
       const setupType = trade.thesis?.setupType;
-      const companyName = trade.company?.name;
-      const industry = trade.company?.industry;
+
+      // Get company data from the Map we fetched earlier
+      const companyData = companyDataMap.get(trade.ticker);
+      const companyName = companyData?.name;
+      const industry = companyData?.industry;
 
       // Determine target and label
       const originalStop = trade.originalStop ?? trade.stop;
@@ -480,8 +525,34 @@ class PositionsView {
         }
       }
 
+      // Handle options display
+      let optionDetailsHTML = '';
+      let quantityHTML = '';
+
+      if (isOptions) {
+        // Format option details: "5C Jan 16, 2026"
+        const strike = trade.strike || 0;
+        const optionSymbol = trade.optionType === 'put' ? 'P' : 'C';
+        let formattedExp = '';
+        if (trade.expirationDate) {
+          const expDate = new Date(trade.expirationDate + 'T00:00:00');
+          formattedExp = expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        const optionDetails = `${strike}${optionSymbol} ${formattedExp}`;
+
+        // For options, shares field contains the actual contract count
+        const contracts = shares;
+        const originalContracts = trade.originalShares || contracts;
+
+        optionDetailsHTML = `<span class="position-card__option-details">${optionDetails}</span>`;
+        quantityHTML = `<span class="position-card__contracts">${isTrimmed ? `${contracts} of ${originalContracts}` : contracts} contracts</span>`;
+      } else {
+        // Stock display
+        quantityHTML = `<span class="position-card__shares">${isTrimmed ? `${shares} of ${trade.originalShares}` : shares} shares</span>`;
+      }
+
       return `
-        <div class="position-card ${shouldAnimate ? 'position-card--animate' : ''} ${isTrimmed ? 'position-card--trimmed' : ''}" data-id="${trade.id}">
+        <div class="position-card ${shouldAnimate ? 'position-card--animate' : ''} ${isTrimmed ? 'position-card--trimmed' : ''} ${isOptions ? 'position-card--options' : ''}" data-id="${trade.id}">
           <div class="position-card__header" style="flex-direction: column; align-items: flex-start;">
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: var(--space-1);">
               <span class="position-card__ticker">${trade.ticker}</span>
@@ -493,7 +564,8 @@ class PositionsView {
                 </span>
               </div>
             </div>
-            <span class="position-card__shares">${isTrimmed ? `${shares} of ${trade.originalShares}` : shares} shares</span>
+            ${optionDetailsHTML}
+            ${quantityHTML}
           </div>
 
           <div class="position-card__details">

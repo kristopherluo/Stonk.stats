@@ -119,7 +119,20 @@ class HistoricalPricesBatcher {
       const url = `https://api.twelvedata.com/time_series?symbol=${symbols}&interval=1day&outputsize=${outputSize}&apikey=${this.apiKey}`;
 
       const response = await fetch(url);
+
+      // Check HTTP status
+      if (!response.ok) {
+        console.error(`[Prices] HTTP ${response.status} ${response.statusText} - API request failed`);
+        return {};
+      }
+
       const data = await response.json();
+
+      // Check for API-level errors (rate limiting, authentication, etc.)
+      if (data.code && data.message) {
+        console.error(`[Prices] Twelve Data API error (${data.code}): ${data.message}`);
+        return {};
+      }
 
       // Handle batch response
       const results = {};
@@ -127,7 +140,7 @@ class HistoricalPricesBatcher {
       if (tickers.length === 1) {
         // Single ticker response format
         if (data.status === 'error') {
-          console.error('Twelve Data error:', data.message);
+          console.error(`[Prices] Twelve Data error: ${data.message}`, data.code ? `(${data.code})` : '');
           return results;
         }
 
@@ -135,15 +148,23 @@ class HistoricalPricesBatcher {
           const ticker = tickers[0];
           const prices = {};
 
+          console.log(`[Prices] ${ticker}: received ${data.values.length} data points`);
+          if (data.values.length > 0) {
+            console.log(`[Prices] ${ticker}: sample API response:`, data.values[0]);
+          }
+
           for (const item of data.values) {
             const date = item.datetime;
             prices[date] = {
               open: parseFloat(item.open),
               high: parseFloat(item.high),
               low: parseFloat(item.low),
-              close: parseFloat(item.close)
+              close: parseFloat(item.close),
+              volume: parseInt(item.volume) || 0
             };
           }
+
+          console.log(`[Prices] ${ticker}: stored ${Object.keys(prices).length} days, sample stored data:`, prices[data.values[0].datetime]);
 
           if (!this.cache[ticker]) {
             this.cache[ticker] = {};
@@ -156,10 +177,21 @@ class HistoricalPricesBatcher {
         for (const ticker of tickers) {
           const tickerData = data[ticker];
 
-          if (!tickerData) continue;
+          if (!tickerData) {
+            // Ticker not in response - determine why
+            const allKeys = Object.keys(data);
+            if (allKeys.length === 0) {
+              console.error(`[Prices] ${ticker}: API returned empty response (possible rate limit or API issue)`);
+            } else if (data.status === 'error') {
+              console.error(`[Prices] ${ticker}: ${data.message}${data.code ? ` (${data.code})` : ''}`);
+            } else {
+              console.error(`[Prices] ${ticker}: Not returned by API (invalid symbol, unsupported exchange, or not included in your API plan)`);
+            }
+            continue;
+          }
 
           if (tickerData.status === 'error') {
-            console.error(`Twelve Data error for ${ticker}:`, tickerData.message);
+            console.error(`[Prices] ${ticker}: ${tickerData.message}${tickerData.code ? ` (${tickerData.code})` : ''}`);
             continue;
           }
 
@@ -172,7 +204,8 @@ class HistoricalPricesBatcher {
                 open: parseFloat(item.open),
                 high: parseFloat(item.high),
                 low: parseFloat(item.low),
-                close: parseFloat(item.close)
+                close: parseFloat(item.close),
+                volume: parseInt(item.volume) || 0
               };
             }
 
@@ -183,6 +216,16 @@ class HistoricalPricesBatcher {
             results[ticker] = prices;
           }
         }
+      }
+
+      // Log summary of what was fetched
+      const successTickers = Object.keys(results);
+      const failedTickers = tickers.filter(t => !results[t]);
+
+      if (failedTickers.length > 0) {
+        console.warn(`[Prices] Batch complete: ${successTickers.length}/${tickers.length} tickers fetched. Failed: ${failedTickers.join(', ')}`);
+      } else if (successTickers.length > 0) {
+        console.log(`[Prices] Batch complete: successfully fetched ${successTickers.length} tickers`);
       }
 
       this.saveCache();
@@ -208,7 +251,15 @@ class HistoricalPricesBatcher {
     const tickersToFetch = [];
     const tickersUsingCache = [];
     for (const ticker of tickers) {
-      if (this.hasRecentData(ticker)) {
+      // If tickerDates is provided, check if cache covers the needed range
+      let hasSufficientCache = false;
+      if (tickerDates && tickerDates[ticker]) {
+        hasSufficientCache = this.hasSufficientDataForDate(ticker, tickerDates[ticker]);
+      } else {
+        hasSufficientCache = this.hasRecentData(ticker);
+      }
+
+      if (hasSufficientCache) {
         results[ticker] = this.cache[ticker];
         tickersUsingCache.push(ticker);
       } else {
@@ -233,11 +284,13 @@ class HistoricalPricesBatcher {
         if (tickerDates[ticker]) {
           const tradeDate = new Date(tickerDates[ticker]);
           const daysAgo = Math.ceil((today - tradeDate) / (1000 * 60 * 60 * 24));
+          console.log(`[Prices] ${ticker}: need data from ${tickerDates[ticker]} (${daysAgo} days ago)`);
           outputSize = Math.max(outputSize, daysAgo + 10); // +10 day buffer
         }
       }
     }
     outputSize = Math.min(outputSize, 500); // Cap at 500 days max
+    console.log(`[Prices] Fetching with outputSize: ${outputSize}`);
 
     console.log(`[Prices] Fetching new data for ${tickersToFetch.length} tickers (${outputSize} days):`, tickersToFetch.join(', '));
 
@@ -288,6 +341,33 @@ class HistoricalPricesBatcher {
 
     // If most recent cached data is older than 7 days, refetch
     return daysSinceUpdate <= 7;
+  }
+
+  /**
+   * Check if we have sufficient historical data for a ticker starting from a specific date
+   * @param {string} ticker - Stock ticker
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @returns {boolean} True if cache covers from startDate to recent
+   */
+  hasSufficientDataForDate(ticker, startDate) {
+    if (!this.cache[ticker]) return false;
+
+    const dates = Object.keys(this.cache[ticker]).sort();
+    if (dates.length === 0) return false;
+
+    const earliestCached = dates[0];
+    const latestCached = dates[dates.length - 1];
+
+    // Check if earliest cached date is on or before the start date we need
+    const coversStartDate = earliestCached <= startDate;
+
+    // Check if latest cached date is recent (within last 7 days)
+    const daysSinceUpdate = (new Date() - new Date(latestCached)) / (1000 * 60 * 60 * 24);
+    const isRecent = daysSinceUpdate <= 7;
+
+    console.log(`[Prices] ${ticker}: cache check - need from ${startDate}, have ${earliestCached} to ${latestCached}, covers: ${coversStartDate}, recent: ${isRecent}`);
+
+    return coversStartDate && isRecent;
   }
 
   /**

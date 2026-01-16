@@ -553,6 +553,20 @@
 .position-card--animate:nth-child(29) { animation-delay: 2240ms; }
 .position-card--animate:nth-child(30) { animation-delay: 2320ms; }
 
+.position-card--options {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(251, 191, 36, 0.06) 0%, transparent 50%),
+    linear-gradient(145deg, #0a0a0a 0%, #000000 50%, #0a0a0a 100%);
+}
+
+.position-card--options::after {
+  background: linear-gradient(135deg,
+    rgba(245, 158, 11, 0.4),
+    rgba(251, 191, 36, 0.4),
+    rgba(234, 179, 8, 0.4));
+}
+
 .position-card--trimmed {
   background:
     radial-gradient(circle at 0% 50%, rgba(245, 158, 11, 0.15) 0%, transparent 50%),
@@ -604,6 +618,27 @@
   font-size: var(--text-sm);
   color: var(--text-secondary);
   text-shadow: 0 0 8px rgba(96, 165, 250, 0.2);
+}
+
+.position-card__option-details {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 60%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.03em;
+  filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.5));
+  animation: tickerShimmer 3s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+
+.position-card__contracts {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-shadow: 0 0 8px rgba(96, 165, 250, 0.2);
+  margin-top: 2px;
 }
 
 .position-card__details {

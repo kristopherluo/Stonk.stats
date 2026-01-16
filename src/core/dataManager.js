@@ -244,10 +244,11 @@ export const dataManager = {
       return;
     }
 
-    const headers = ['Date', 'Ticker', 'Entry', 'Stop', 'Target', 'Shares', 'Position Size', 'Risk $', 'Risk %', 'Status', 'Exit Price', 'P&L', 'Notes'];
+    const headers = ['Date', 'Ticker', 'Asset Type', 'Entry', 'Stop', 'Target', 'Shares/Contracts', 'Position Size', 'Risk $', 'Risk %', 'Strike', 'Expiration', 'Option Type', 'Premium', 'Status', 'Exit Price', 'P&L', 'Notes'];
     const rows = trades.map(t => [
       new Date(t.timestamp).toLocaleDateString(),
       t.ticker,
+      t.assetType || 'stock',
       t.entry,
       t.stop,
       t.target || '',
@@ -255,6 +256,10 @@ export const dataManager = {
       t.positionSize?.toFixed(2) || '',
       t.riskDollars?.toFixed(2) || '',
       t.riskPercent,
+      t.strike || '',
+      t.expirationDate || '',
+      t.optionType || '',
+      t.premium || '',
       t.status,
       t.exitPrice || '',
       t.pnl?.toFixed(2) || '',

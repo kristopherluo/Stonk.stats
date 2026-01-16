@@ -7,8 +7,11 @@ import { state } from './state.js';
 import { sleep } from './utils.js';
 import * as marketHours from '../utils/marketHours.js';
 import { storage } from '../utils/storage.js';
+import { compressText, decompressText } from '../utils/compression.js';
 
 const CACHE_KEY = 'riskCalcPriceCache';
+const SUMMARY_CACHE_KEY = 'companySummaryCache';
+const MAX_SUMMARY_CACHE = 30; // Keep only 30 most recent summaries
 
 export const priceTracker = {
   apiKey: null,
@@ -158,10 +161,18 @@ export const priceTracker = {
       return null; // Silently return null if no API key
     }
 
-    // Check cache first
-    const cached = this.getCachedCompanyData(ticker);
-    if (cached) {
+    // Check cache first - but only use it if it has industry data (full Finnhub profile)
+    // Cached data might only have summary (from Alpha Vantage) without industry
+    const cached = await this.getCachedCompanyData(ticker);
+    if (cached && cached.industry) {
+      console.log(`[Company Profile] ✓ Using cached data for ${ticker}`);
       return cached;
+    }
+
+    if (cached && !cached.industry) {
+      console.log(`[Company Profile] Cached data for ${ticker} missing industry, fetching full profile...`);
+    } else {
+      console.log(`[Company Profile] Fetching from API for ${ticker}...`);
     }
 
     try {
@@ -194,8 +205,11 @@ export const priceTracker = {
         description: data.description || data.longBusinessSummary || ''
       };
 
+      console.log(`[Company Profile] ✓ Fetched data for ${ticker}, industry: ${profile.industry}`);
+
       // Cache the data
-      this.saveCompanyDataToCache(ticker, profile);
+      await this.saveCompanyDataToCache(ticker, profile);
+      console.log(`[Company Profile] ✓ Saved to cache for ${ticker}`);
 
       return profile;
     } catch (error) {
@@ -205,17 +219,102 @@ export const priceTracker = {
   },
 
   /**
+   * Get cached company summary (decompressed)
+   * Returns: { summary, name, sector, industry } or null
+   */
+  async getCachedSummary(ticker) {
+    try {
+      const cache = await storage.getItem(SUMMARY_CACHE_KEY);
+      if (!cache || !cache.summaries) return null;
+
+      const entry = cache.summaries[ticker.toUpperCase()];
+      if (!entry) return null;
+
+      // Check if cache is expired (30 days)
+      const age = Date.now() - entry.cachedAt;
+      const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+      if (age >= thirtyDays) {
+        console.log(`[Summary Cache] ${ticker}: expired (${Math.round(age / (24 * 60 * 60 * 1000))} days old)`);
+        return null;
+      }
+
+      // Decompress summary
+      const decompressed = {
+        ...entry,
+        summary: decompressText(entry.summary)
+      };
+
+      console.log(`[Summary Cache] ✓ Hit for ${ticker} (age: ${Math.round(age / (24 * 60 * 60 * 1000))} days)`);
+      return decompressed;
+    } catch (e) {
+      console.error('[Summary Cache] Error reading cache:', e);
+      return null;
+    }
+  },
+
+  /**
+   * Save company summary to cache (compressed, LRU eviction)
+   * Keeps only 30 most recent summaries
+   */
+  async saveSummaryToCache(ticker, summaryData) {
+    try {
+      const cache = await storage.getItem(SUMMARY_CACHE_KEY) || { summaries: {}, accessOrder: [] };
+
+      // Compress the summary text (often 1000+ chars)
+      const compressed = {
+        ticker: ticker.toUpperCase(),
+        name: summaryData.name,
+        sector: summaryData.sector,
+        industry: summaryData.industry,
+        summary: compressText(summaryData.summary),
+        cachedAt: Date.now()
+      };
+
+      // Update summaries
+      cache.summaries[ticker.toUpperCase()] = compressed;
+
+      // Update access order (most recent at end)
+      cache.accessOrder = cache.accessOrder.filter(t => t !== ticker.toUpperCase());
+      cache.accessOrder.push(ticker.toUpperCase());
+
+      // Evict oldest if over limit
+      if (cache.accessOrder.length > MAX_SUMMARY_CACHE) {
+        const toRemove = cache.accessOrder.shift(); // Remove oldest
+        delete cache.summaries[toRemove];
+        console.log(`[Summary Cache] Evicted ${toRemove} (LRU)`);
+      }
+
+      await storage.setItem(SUMMARY_CACHE_KEY, cache);
+      console.log(`[Summary Cache] ✓ Saved ${ticker} (${cache.accessOrder.length}/${MAX_SUMMARY_CACHE} cached)`);
+    } catch (e) {
+      console.error('[Summary Cache] Error saving cache:', e);
+    }
+  },
+
+  /**
    * Fetch company summary/description from Alpha Vantage
    * Returns: { summary: string, name: string, sector: string, industry: string }
    */
   async fetchCompanySummary(ticker) {
+    // Check cache first
+    const cached = await this.getCachedSummary(ticker);
+    if (cached) {
+      return cached;
+    }
+
     const alphaVantageKey = await storage.getItem('alphaVantageApiKey');
 
     if (!alphaVantageKey) {
       throw new Error('Alpha Vantage API key not configured. Add it in Settings to fetch company summaries.');
     }
 
-    return await this.fetchCompanySummaryFromAlphaVantage(ticker, alphaVantageKey);
+    console.log(`[Summary Cache] Miss for ${ticker}, fetching from API...`);
+    const summary = await this.fetchCompanySummaryFromAlphaVantage(ticker, alphaVantageKey);
+
+    // Cache the result
+    await this.saveSummaryToCache(ticker, summary);
+
+    return summary;
   },
 
   async fetchCompanySummaryFromAlphaVantage(ticker, apiKey) {
@@ -229,6 +328,8 @@ export const priceTracker = {
 
     const data = await response.json();
 
+    console.log(`[Alpha Vantage] Response for ${ticker}:`, data);
+
     // Check for API errors
     if (data.Note) {
       throw new Error('Alpha Vantage API rate limit reached. Free tier: 25 calls/day, 5 calls/minute.');
@@ -239,6 +340,7 @@ export const priceTracker = {
     }
 
     if (!data.Name) {
+      console.warn(`[Alpha Vantage] No Name field in response for ${ticker}. Response keys:`, Object.keys(data));
       throw new Error('No company overview data available from Alpha Vantage');
     }
 
