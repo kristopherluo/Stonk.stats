@@ -1084,3 +1084,24 @@
   opacity: 0.7;
   margin: 0;
 }
+
+/* Option column glow effect (same as ticker) */
+.journal-option-glow {
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 60%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.03em;
+  filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.5));
+  animation: tickerShimmer 3s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+
+@keyframes tickerShimmer {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}

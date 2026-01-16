@@ -46,12 +46,14 @@ class TrimModal {
       rDisplay: document.getElementById('trimRDisplay'),
       exitPriceError: document.getElementById('trimExitPriceError'),
       sharesInput: document.getElementById('trimSharesInput'),
+      sharesLabel: document.querySelector('label[for="trimSharesInput"]'),
       percentDisplay: document.getElementById('trimPercentDisplay'),
       sharesError: document.getElementById('trimSharesError'),
       dateInput: document.getElementById('trimDate'),
       newStop: document.getElementById('trimNewStop'),
       newStopError: document.getElementById('trimNewStopError'),
       profitPerShare: document.getElementById('trimProfitPerShare'),
+      profitPerShareLabel: document.querySelector('.trim-preview__label'),
       totalPnL: document.getElementById('trimTotalPnL'),
       preview: document.getElementById('trimPreview'),
       onlyMoveStopCheckbox: document.getElementById('onlyMoveStopCheckbox'),
@@ -70,7 +72,17 @@ class TrimModal {
       targetEdit: document.getElementById('trimTargetEdit'),
       entryPriceError: document.getElementById('trimEntryPriceError'),
       originalStopError: document.getElementById('trimOriginalStopError'),
-      targetError: document.getElementById('trimTargetError')
+      targetError: document.getElementById('trimTargetError'),
+      strikeRow: document.getElementById('trimStrikeRow'),
+      strikeDisplay: document.getElementById('trimStrike'),
+      strikeInput: document.getElementById('trimStrikeInput'),
+      strikeEdit: document.getElementById('trimStrikeEdit'),
+      strikeError: document.getElementById('trimStrikeError'),
+      expirationRow: document.getElementById('trimExpirationRow'),
+      expirationDisplay: document.getElementById('trimExpiration'),
+      expirationInput: document.getElementById('trimExpirationInput'),
+      expirationEdit: document.getElementById('trimExpirationEdit'),
+      expirationError: document.getElementById('trimExpirationError')
     };
 
     // Cache sections for show/hide (done after modal is in DOM)
@@ -170,6 +182,23 @@ class TrimModal {
       trade.remainingShares = trade.shares;
       trade.trimHistory = [];
       trade.totalRealizedPnL = 0;
+    }
+
+    // Update labels based on asset type
+    const isOptions = trade.assetType === 'options';
+    if (this.elements.sharesLabel) {
+      this.elements.sharesLabel.textContent = isOptions ? 'Contracts' : 'Shares';
+    }
+    if (this.elements.profitPerShareLabel) {
+      this.elements.profitPerShareLabel.textContent = isOptions ? 'Profit per Contract' : 'Profit per Share';
+    }
+
+    // Show/hide options fields
+    if (this.elements.strikeRow) {
+      this.elements.strikeRow.style.display = isOptions ? 'flex' : 'none';
+    }
+    if (this.elements.expirationRow) {
+      this.elements.expirationRow.style.display = isOptions ? 'flex' : 'none';
     }
 
     this.populateTradeData(trade);
@@ -284,6 +313,25 @@ class TrimModal {
     }
     if (this.elements.targetInput) {
       this.elements.targetInput.value = targetPrice.toFixed(2);
+    }
+
+    // Populate strike and expiration for options
+    if (trade.assetType === 'options') {
+      if (this.elements.strikeDisplay) {
+        this.elements.strikeDisplay.textContent = trade.strike ? formatCurrency(trade.strike) : '$0.00';
+      }
+      if (this.elements.strikeInput) {
+        this.elements.strikeInput.value = trade.strike ? trade.strike.toFixed(2) : '';
+      }
+
+      if (this.elements.expirationDisplay && trade.expirationDate) {
+        const expDate = new Date(trade.expirationDate + 'T00:00:00');
+        const formattedExp = expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        this.elements.expirationDisplay.textContent = formattedExp;
+      }
+      if (this.elements.expirationInput && trade.expirationDate) {
+        this.elements.expirationInput.value = trade.expirationDate;
+      }
     }
 
     // Clear new stop input
@@ -669,12 +717,16 @@ class TrimModal {
       this.clearInputError(this.elements.entryPriceInput, this.elements.entryPriceError);
       this.clearInputError(this.elements.originalStopInput, this.elements.originalStopError);
       this.clearInputError(this.elements.targetInput, this.elements.targetError);
+      this.clearInputError(this.elements.strikeInput, this.elements.strikeError);
+      this.clearInputError(this.elements.expirationInput, this.elements.expirationError);
 
       // Edit position details mode - update entry, original stop, and target
       const newEntry = parseFloat(this.elements.entryPriceInput?.value);
       const newOriginalStop = parseFloat(this.elements.originalStopInput?.value);
       const newEntryDate = this.elements.entryDateInput?.value;
       const newTarget = parseFloat(this.elements.targetInput?.value);
+      const newStrike = this.currentTrade.assetType === 'options' ? parseFloat(this.elements.strikeInput?.value) : null;
+      const newExpiration = this.currentTrade.assetType === 'options' ? this.elements.expirationInput?.value : null;
 
       if (isNaN(newEntry) || newEntry <= 0) {
         this.showInputError(
@@ -719,6 +771,39 @@ class TrimModal {
         return;
       }
 
+      // Validate options fields
+      if (this.currentTrade.assetType === 'options') {
+        if (isNaN(newStrike) || newStrike <= 0) {
+          this.showInputError(
+            this.elements.strikeInput,
+            this.elements.strikeError,
+            'Strike price must be greater than 0'
+          );
+          return;
+        }
+
+        if (!newExpiration) {
+          this.showInputError(
+            this.elements.expirationInput,
+            this.elements.expirationError,
+            'Expiration date is required'
+          );
+          return;
+        }
+
+        // Validate expiration is on or after trade date
+        const tradeDate = new Date(newEntryDate + 'T00:00:00');
+        const expirationDate = new Date(newExpiration + 'T00:00:00');
+        if (expirationDate < tradeDate) {
+          this.showInputError(
+            this.elements.expirationInput,
+            this.elements.expirationError,
+            'Expiration date cannot be before trade date'
+          );
+          return;
+        }
+      }
+
       const oldEntry = this.currentTrade.entry;
       const oldOriginalStop = this.currentTrade.originalStop ?? this.currentTrade.stop;
 
@@ -734,11 +819,18 @@ class TrimModal {
         updates.target = newTarget;
       }
 
+      // Add options fields if options trade
+      if (this.currentTrade.assetType === 'options') {
+        updates.strike = newStrike;
+        updates.expirationDate = newExpiration;
+      }
+
       // If there's existing trim history, recalculate P&L for each trim
       if (this.currentTrade.trimHistory && this.currentTrade.trimHistory.length > 0) {
         const updatedTrimHistory = this.currentTrade.trimHistory.map(trim => {
-          // Recalculate P&L based on new entry
-          const newPnl = (trim.exitPrice - newEntry) * trim.shares;
+          // Recalculate P&L based on new entry (with options multiplier)
+          const multiplier = this.currentTrade.assetType === 'options' ? 100 : 1;
+          const newPnl = (trim.exitPrice - newEntry) * trim.shares * multiplier;
           // Recalculate R-multiple based on new original stop
           const newRiskPerShare = newEntry - newOriginalStop;
           const newRMultiple = newRiskPerShare !== 0 ? (trim.exitPrice - newEntry) / newRiskPerShare : 0;
@@ -857,7 +949,10 @@ class TrimModal {
     const originalStop = this.currentTrade.originalStop ?? this.currentTrade.stop;
     const riskPerShare = this.currentTrade.entry - originalStop;
     const rMultiple = riskPerShare !== 0 ? (exitPrice - this.currentTrade.entry) / riskPerShare : 0;
-    const pnl = (exitPrice - this.currentTrade.entry) * sharesToClose;
+
+    // For options, multiply by 100 (contract multiplier)
+    const multiplier = this.currentTrade.assetType === 'options' ? 100 : 1;
+    const pnl = (exitPrice - this.currentTrade.entry) * sharesToClose * multiplier;
 
     const closeDate = this.elements.dateInput?.value
       ? new Date(this.elements.dateInput.value + 'T12:00:00').toISOString()

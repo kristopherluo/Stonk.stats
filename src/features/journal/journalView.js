@@ -763,7 +763,7 @@ class JournalView {
         const day = expDate.getDate();
         const year = expDate.getFullYear().toString().slice(-2);
         const formattedExp = `${month}/${day}/${year}`;
-        optionDisplay = `${strike}${optionSymbol} ${formattedExp}`;
+        optionDisplay = `<span class="journal-option-glow">${strike}${optionSymbol} ${formattedExp}</span>`;
       }
 
       return `

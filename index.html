@@ -402,7 +402,7 @@
               <th>Exit</th>
               <th>Shares/Cons</th>
               <th>Position %</th>
-              <th data-sort="pnl" class="sortable">P&L ($)</th>
+              <th data-sort="pnl" class="sortable">P&L</th>
               <th>P&L %</th>
               <th>R-Multiple</th>
               <th>Status</th>
@@ -879,6 +879,23 @@
         <div class="trim-summary__row">
           <span class="trim-summary__label">Current Stop</span>
           <span class="trim-summary__value" id="trimStopLoss">$0.00</span>
+        </div>
+        <div class="trim-summary__row trim-summary__row--options" id="trimStrikeRow" style="display: none; flex-wrap: wrap;">
+          <span class="trim-summary__label">Strike</span>
+          <span class="trim-summary__value trim-summary__value--display" id="trimStrike">$0.00</span>
+          <div class="input-wrapper input-wrapper--prefix input-wrapper--sm trim-summary__value--edit" id="trimStrikeEdit" style="display: none;">
+            <span class="input-prefix">$</span>
+            <input type="text" class="input input--mono" id="trimStrikeInput" placeholder="0.00">
+          </div>
+          <div class="input-error" id="trimStrikeError" style="width: 100%; margin-left: auto;"></div>
+        </div>
+        <div class="trim-summary__row trim-summary__row--options" id="trimExpirationRow" style="display: none; flex-wrap: wrap;">
+          <span class="trim-summary__label">Expiration</span>
+          <span class="trim-summary__value trim-summary__value--display" id="trimExpiration">-</span>
+          <div class="input-wrapper input-wrapper--sm trim-summary__value--edit" id="trimExpirationEdit" style="display: none; width: auto;">
+            <input type="date" class="input" id="trimExpirationInput">
+          </div>
+          <div class="input-error" id="trimExpirationError" style="width: 100%; margin-left: auto;"></div>
         </div>
         <div class="trim-summary__row">
           <span class="trim-summary__label">Risk Per Share</span>
