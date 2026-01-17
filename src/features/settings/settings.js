@@ -90,6 +90,8 @@ class Settings {
       twelveDataApiKeyBtn: document.getElementById('twelveDataApiKeyBtn'),
       alphaVantageApiKey: document.getElementById('alphaVantageApiKey'),
       alphaVantageApiKeyBtn: document.getElementById('alphaVantageApiKeyBtn'),
+      optionsPriceApiKey: document.getElementById('optionsPriceApiKey'),
+      optionsPriceApiKeyBtn: document.getElementById('optionsPriceApiKeyBtn'),
 
       // Data management buttons
       exportDataBtn: document.getElementById('exportDataBtn'),
@@ -317,6 +319,39 @@ class Settings {
       });
     }
 
+    // Options Price API Key
+    if (this.elements.optionsPriceApiKey && this.elements.optionsPriceApiKeyBtn) {
+      const saveOptionsPriceKey = async (apiKey) => {
+        await storage.setItem('optionsPriceApiKey', apiKey);
+        // TODO: Set API key in options price tracker when implemented
+        if (apiKey) {
+          showToast('Options API key saved', 'success');
+          this.setApiKeyButtonActive(this.elements.optionsPriceApiKeyBtn);
+        }
+      };
+
+      // Button click handler
+      this.elements.optionsPriceApiKeyBtn.addEventListener('click', () => {
+        const apiKey = this.elements.optionsPriceApiKey.value.trim();
+        saveOptionsPriceKey(apiKey);
+      });
+
+      // Enter key handler
+      this.elements.optionsPriceApiKey.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const apiKey = e.target.value.trim();
+          saveOptionsPriceKey(apiKey);
+          this.elements.optionsPriceApiKeyBtn.focus();
+        }
+      });
+
+      // Re-enable button when input changes
+      this.elements.optionsPriceApiKey.addEventListener('input', () => {
+        this.setApiKeyButtonInactive(this.elements.optionsPriceApiKeyBtn);
+      });
+    }
+
     // Cash Flow: Deposit
     if (this.elements.depositAmount) {
       // Real-time validation
@@ -445,6 +480,15 @@ class Settings {
     }
     if (alphaVantageKey) {
       this.setApiKeyButtonActive(this.elements.alphaVantageApiKeyBtn);
+    }
+
+    const optionsPriceKey = (await storage.getItem('optionsPriceApiKey')) || '';
+    if (this.elements.optionsPriceApiKey) {
+      this.elements.optionsPriceApiKey.value = optionsPriceKey;
+    }
+    if (optionsPriceKey) {
+      // TODO: Set API key in options price tracker when implemented
+      this.setApiKeyButtonActive(this.elements.optionsPriceApiKeyBtn);
     }
 
     // Update header

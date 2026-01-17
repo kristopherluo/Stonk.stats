@@ -688,7 +688,6 @@
   background: rgba(127, 127, 127, 0.2);
   color: var(--text-muted);
   border: 1px solid rgba(127, 127, 127, 0.3);
-  text-decoration: line-through;
 }
 
 @keyframes urgentPulse {

@@ -545,9 +545,12 @@ class PositionsView {
           // Determine urgency styling
           let urgencyClass = 'option-expiry--safe';
           let urgencyText = 'safe';
+          let badgeText = `${daysUntil}d`;
+
           if (daysUntil < 0) {
             urgencyClass = 'option-expiry--expired';
-            urgencyText = 'EXPIRED';
+            urgencyText = 'option has expired';
+            badgeText = 'Expired';
           } else if (daysUntil === 0) {
             urgencyClass = 'option-expiry--urgent';
             urgencyText = 'expires today';
@@ -562,7 +565,7 @@ class PositionsView {
             urgencyText = 'approaching';
           }
 
-          daysUntilExpHTML = `<span class="position-card__expiry-badge ${urgencyClass}" title="${urgencyText}">${daysUntil < 0 ? 'EXPIRED' : `${daysUntil}d`}</span>`;
+          daysUntilExpHTML = `<span class="position-card__expiry-badge ${urgencyClass}" title="${urgencyText}">${badgeText}</span>`;
         }
 
         const optionDetails = `${strike}${optionSymbol} ${formattedExp}`;
