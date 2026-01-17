@@ -585,19 +585,27 @@ class PositionsView {
 
       return `
         <div class="position-card ${shouldAnimate ? 'position-card--animate' : ''} ${isTrimmed ? 'position-card--trimmed' : ''} ${isOptions ? 'position-card--options' : ''}" data-id="${trade.id}">
-          <div class="position-card__header" style="flex-direction: column; align-items: flex-start;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: var(--space-1);">
-              <span class="position-card__ticker">${trade.ticker}</span>
-              <div class="position-card__badges" style="flex-wrap: nowrap;">
-                ${industry ? `<span class="position-card__badge position-card__badge--industry">${industry}</span>` : ''}
-                ${setupType ? `<span class="position-card__badge position-card__badge--type">${setupType.replace(/\b\w/g, l => l.toUpperCase())}</span>` : ''}
-                <span class="position-card__badge position-card__badge--${statusClass}">
-                  ${statusText}
-                </span>
-              </div>
+          <div class="position-card__header" style="display: grid; grid-template-columns: auto 1fr; gap: var(--space-2); row-gap: 2px; align-items: start;">
+            <span class="position-card__ticker" style="grid-column: 1; grid-row: 1;">${trade.ticker}</span>
+            <div style="grid-column: 2; grid-row: 1 / span ${isOptions ? '3' : '2'}; display: flex; align-items: flex-start; align-content: flex-start; gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end;">
+              ${industry ? `<span class="position-card__badge position-card__badge--industry" style="white-space: nowrap;">${industry}</span>` : ''}
+              ${setupType ? `<span class="position-card__badge position-card__badge--type" style="white-space: nowrap;">${setupType.replace(/\b\w/g, l => l.toUpperCase())}</span>` : ''}
+              <span class="position-card__badge position-card__badge--${statusClass}" style="white-space: nowrap;">
+                ${statusText}
+              </span>
             </div>
-            ${optionDetailsHTML}
-            ${quantityHTML}
+            ${isOptions ? `
+              <div style="grid-column: 1; grid-row: 2; display: flex; align-items: center;">
+                ${optionDetailsHTML}
+              </div>
+              <div style="grid-column: 1; grid-row: 3;">
+                ${quantityHTML}
+              </div>
+            ` : `
+              <div style="grid-column: 1; grid-row: 2;">
+                ${quantityHTML}
+              </div>
+            `}
           </div>
 
           <div class="position-card__details">
@@ -617,8 +625,8 @@ class PositionsView {
               <span class="position-card__detail-label">${targetLabel}</span>
             </div>
             <div style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); outline: 2px solid var(--warning); outline-offset: 2px; border-radius: 4px; padding: 2px 4px; margin-top: -6px;">
-              <span class="position-card__detail-value" style="color: var(--warning);">${formatCurrency(pnlData.currentPrice)} <span style="font-size: var(--text-xs); color: var(--text-muted); font-weight: normal;">${pnlData.currentPrice >= targetPrice ? 'target reached' : 'nearing target'}</span></span>
-              <span class="position-card__detail-value" style="color: var(--warning);">${formatCurrency(targetPrice)}</span>
+              <span class="position-card__detail-value" style="color: var(--warning); white-space: nowrap;">${formatCurrency(pnlData.currentPrice)} <span style="font-size: var(--text-xs); color: var(--text-muted); font-weight: normal;">${pnlData.currentPrice >= targetPrice ? 'target reached' : 'nearing target'}</span></span>
+              <span class="position-card__detail-value" style="color: var(--warning); text-align: right; white-space: nowrap;">${formatCurrency(targetPrice)}</span>
             </div>
             ` : pnlData ? `
             <div class="position-card__detail">
