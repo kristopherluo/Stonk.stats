@@ -49,6 +49,7 @@
   <link rel="stylesheet" href="src/features/positions/positions.css">
   <link rel="stylesheet" href="src/features/journal/journal.css">
   <link rel="stylesheet" href="src/features/stats/stats.css">
+  <link rel="stylesheet" href="src/features/stats/pnlCalendar.css">
   <link rel="stylesheet" href="src/components/styles/storageMonitor.css">
   <link rel="stylesheet" href="src/styles/flatpickr-theme.css">
 </head>
@@ -424,7 +425,9 @@
 
     <!-- Stats View (view swapped with main) -->
     <section class="stats-view view--hidden" id="statsView">
-      <div class="stats-header">
+      <!-- Stats Overview Container: Filters, Stats Cards, and Equity Curve -->
+      <div class="stats-overview-container">
+        <div class="stats-header">
         <div class="stats-header__left">
           <span class="stats-header__date-range" id="statsDateRange">All time</span>
         </div>
@@ -476,80 +479,113 @@
         </div>
       </div>
 
-      <!-- Trading Performance Section -->
-      <div class="stats-section">
-        <div class="stats-grid">
-          <div class="stat-card stat-card--highlight">
-            <span class="stat-card__label">Current Account</span>
-            <span class="stat-card__value" id="statOpenPositions">$0</span>
-            <span class="stat-card__sub" id="statOpenRisk">$0 at risk</span>
+      <!-- Top Row: Stats Cards + Equity Curve Side-by-Side -->
+      <div class="stats-top-row">
+        <!-- Left Column: Stat Cards -->
+        <div class="stats-cards-column">
+          <!-- Trading Performance Section -->
+          <div class="stats-section">
+            <div class="stats-grid">
+              <div class="stat-card stat-card--highlight">
+                <span class="stat-card__label">Current Account</span>
+                <span class="stat-card__value" id="statOpenPositions">$0</span>
+                <span class="stat-card__sub" id="statOpenRisk">$0 at risk</span>
+              </div>
+              <div class="stat-card" id="statPnLCard">
+                <span class="stat-card__label">Realized P&L</span>
+                <span class="stat-card__value" id="statTotalPnL">$0.00</span>
+                <span class="stat-card__sub" id="statPnLTrades">0 closed trades</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-card__label">Win Rate</span>
+                <span class="stat-card__value" id="statWinRate">—</span>
+                <span class="stat-card__sub" id="statWinLoss">0W / 0L</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-card__label">Sharpe Ratio</span>
+                <span class="stat-card__value" id="statSharpe">—</span>
+                <span class="stat-card__sub">Risk-adjusted return</span>
+              </div>
+            </div>
           </div>
-          <div class="stat-card" id="statPnLCard">
-            <span class="stat-card__label">Realized P&L</span>
-            <span class="stat-card__value" id="statTotalPnL">$0.00</span>
-            <span class="stat-card__sub" id="statPnLTrades">0 closed trades</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-card__label">Win Rate</span>
-            <span class="stat-card__value" id="statWinRate">—</span>
-            <span class="stat-card__sub" id="statWinLoss">0W / 0L</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-card__label">Sharpe Ratio</span>
-            <span class="stat-card__value" id="statSharpe">—</span>
-            <span class="stat-card__sub">Risk-adjusted return</span>
+
+          <!-- Account Growth Section -->
+          <div class="stats-section">
+            <div class="stats-grid">
+              <div class="stat-card" id="statCurrentAccountCard">
+                <span class="stat-card__label">Trading P&L</span>
+                <span class="stat-card__value" id="statCurrentAccount">$0.00</span>
+                <span class="stat-card__sub" id="statAccountChange">From starting account $0</span>
+              </div>
+              <div class="stat-card" id="statTradingGrowthCard">
+                <span class="stat-card__label">Trading P&L %</span>
+                <span class="stat-card__value" id="statTradingGrowth">0.00%</span>
+                <span class="stat-card__sub">From starting</span>
+              </div>
+              <div class="stat-card" id="statTotalGrowthCard">
+                <span class="stat-card__label">Total Growth %</span>
+                <span class="stat-card__value" id="statTotalGrowth">0.00%</span>
+                <span class="stat-card__sub">P&L including deposits & withdrawals</span>
+              </div>
+              <div class="stat-card" id="statCashFlowCard">
+                <span class="stat-card__label">Net Cash Flow</span>
+                <span class="stat-card__value" id="statCashFlow">$0.00</span>
+                <span class="stat-card__sub">(Deposits - withdrawals)</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Account Growth Section -->
-      <div class="stats-section">
-        <div class="stats-grid">
-          <div class="stat-card" id="statCurrentAccountCard">
-            <span class="stat-card__label">Trading P&L</span>
-            <span class="stat-card__value" id="statCurrentAccount">$0.00</span>
-            <span class="stat-card__sub" id="statAccountChange">From starting account $0</span>
-          </div>
-          <div class="stat-card" id="statTradingGrowthCard">
-            <span class="stat-card__label">Trading P&L %</span>
-            <span class="stat-card__value" id="statTradingGrowth">0.00%</span>
-            <span class="stat-card__sub">From starting</span>
-          </div>
-          <div class="stat-card" id="statTotalGrowthCard">
-            <span class="stat-card__label">Total Growth %</span>
-            <span class="stat-card__value" id="statTotalGrowth">0.00%</span>
-            <span class="stat-card__sub">P&L including deposits & withdrawals</span>
-          </div>
-          <div class="stat-card" id="statCashFlowCard">
-            <span class="stat-card__label">Net Cash Flow</span>
-            <span class="stat-card__value" id="statCashFlow">$0.00</span>
-            <span class="stat-card__sub">(Deposits - withdrawals)</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Equity Curve Chart -->
-      <div class="stats-section">
-        <div class="stats-chart">
-          <div class="stats-chart__header">
-            <h3 class="stats-chart__title">
-              Equity Curve
-              <span class="stats-chart__loading" id="equityChartLoading" style="display: none;">
-                <svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                </svg>
-              </span>
-            </h3>
-          </div>
-          <div class="stats-chart__container" id="equityChartContainer">
-            <canvas class="stats-chart__canvas" id="equityChartCanvas"></canvas>
-            <!-- Empty state (shown when no data) -->
-            <div class="stats-chart__empty" id="equityChartEmpty" style="display: none;">
-              <span class="stats-chart__empty-text">Open some trades to see your equity curve</span>
+        <!-- Right Column: Equity Curve -->
+        <div class="stats-chart-column">
+          <div class="stats-section">
+            <div class="stats-chart">
+              <div class="stats-chart__header">
+                <h3 class="stats-chart__title">
+                  Equity Curve
+                  <span class="stats-chart__loading" id="equityChartLoading" style="display: none;">
+                    <svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                    </svg>
+                  </span>
+                </h3>
+              </div>
+              <div class="stats-chart__container" id="equityChartContainer">
+                <canvas class="stats-chart__canvas" id="equityChartCanvas"></canvas>
+                <!-- Empty state (shown when no data) -->
+                <div class="stats-chart__empty" id="equityChartEmpty" style="display: none;">
+                  <span class="stats-chart__empty-text">Open some trades to see your equity curve</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
+      </div>
+      <!-- End Stats Overview Container -->
+
+      <!-- Daily Trading Activity Container: Calendar and Daily Trades -->
+      <div class="stats-details-container">
+        <div class="stats-details-row">
+          <!-- Left: P&L Calendar -->
+          <div class="stats-calendar-column">
+            <div id="pnlCalendar" class="pnl-calendar">
+              <!-- Calendar component renders here -->
+            </div>
+          </div>
+
+          <!-- Right: Trades for Selected Day -->
+          <div class="stats-trades-column">
+            <div id="selectedDayDateRange" class="selected-day-trades__date-range"></div>
+            <div id="selectedDayTrades" class="selected-day-trades">
+              <div class="selected-day-trades__empty">
+                Loading...
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- End Daily Trading Activity Container -->
     </section>
   </div>
 

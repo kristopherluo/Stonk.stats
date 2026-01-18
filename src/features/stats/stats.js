@@ -12,11 +12,22 @@ import { DateRangeFilter } from '../../shared/DateRangeFilter.js';
 import { FilterPopup } from '../../shared/FilterPopup.js';
 import { sharedMetrics } from '../../shared/SharedMetrics.js';
 import { EquityChart } from './statsChart.js';
+import { pnlCalendar } from './PnLCalendar.js';
 import { priceTracker } from '../../core/priceTracker.js';
 import eodCacheManager from '../../core/eodCacheManager.js';
 import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 import * as marketHours from '../../utils/marketHours.js';
 import { getTradeEntryDateString } from '../../utils/tradeUtils.js';
+import { viewManager } from '../../components/ui/viewManager.js';
+import { journalView } from '../journal/journalView.js';
+import { renderJournalTableRows } from '../../shared/journalTableRenderer.js';
+
+// Timing constants
+const AUTO_REFRESH_INTERVAL_MS = 60000; // 60 seconds
+const VIEW_TRANSITION_DELAY_MS = 550;
+const JOURNAL_LOAD_DELAY_MS = 150;
+const SCROLL_DELAY_MS = 200;
+const ANIMATION_STAGGER_MS = 80;
 
 class Stats {
   constructor() {
@@ -25,6 +36,7 @@ class Stats {
     this.filters = new DateRangeFilter();
     this.calculator = new StatsCalculator();
     this.chart = null;
+    this.calendar = null; // P&L calendar component
     this.isCalculating = false;
     this.filterPopup = null; // Shared filter popup component
     this.autoRefreshInterval = null; // For auto-refreshing prices
@@ -79,6 +91,14 @@ class Stats {
     // Initialize equity chart
     this.chart = new EquityChart();
     this.chart.init();
+
+    // Initialize P&L calendar
+    this.calendar = pnlCalendar;
+    this.calendar.onDayClick = (dateStr, weekRange) => this.handleCalendarDayClick(dateStr, weekRange);
+
+    // Note: Calendar init is async, but we don't await it here to avoid blocking
+    // The auto-select of today will happen after the calendar renders
+    this.calendar.init();
 
     // Listen for journal changes - use SMART invalidation for specific trades
     state.on('journalEntryAdded', (entry) => {
@@ -171,7 +191,7 @@ class Stats {
         this.startAutoRefresh(); // Start polling prices
         setTimeout(() => {
           this.refresh();
-        }, 550);
+        }, VIEW_TRANSITION_DELAY_MS);
       } else if (data.from === 'stats') {
         this.stopAutoRefresh(); // Stop polling when leaving stats page
       }
@@ -377,6 +397,11 @@ class Stats {
       await this.calculate();
       this.render();
       await this.renderEquityCurve();
+
+      // Refresh calendar after equity curve is built
+      if (this.calendar) {
+        this.calendar.refresh();
+      }
     } catch (error) {
       console.error('Error refreshing stats:', error);
       showToast('Error calculating stats', 'error');
@@ -515,8 +540,9 @@ class Stats {
       this.elements.currentAccountCard?.classList.toggle('stat-card--danger', !isPositive);
     }
     if (this.elements.accountChange) {
-      const startDate = this.formatDateDisplay(s.accountAtRangeStartDate);
-      this.elements.accountChange.innerHTML = `From starting <span class="stat-card__sub--highlight">$${this.formatNumber(s.accountAtRangeStart)}</span> on ${startDate}`;
+      const startDate = this.formatDateShort(s.accountAtRangeStartDate);
+      const startAmount = this.formatNumberShort(s.accountAtRangeStart);
+      this.elements.accountChange.innerHTML = `From <span class="stat-card__sub--highlight">${startDate} · $${startAmount}</span>`;
     }
 
     // Trading Growth %
@@ -548,7 +574,7 @@ class Stats {
     // Total Growth % subtitle
     const totalGrowthSub = this.elements.totalGrowthCard?.querySelector('.stat-card__sub');
     if (totalGrowthSub) {
-      totalGrowthSub.textContent = '(P&L + Net Cash Flow) / starting';
+      totalGrowthSub.textContent = 'Including cash flow';
     }
 
     // Net Cash Flow
@@ -559,6 +585,12 @@ class Stats {
         : `-$${this.formatNumber(Math.abs(s.netCashFlow))}`;
       this.elements.cashFlowCard?.classList.toggle('stat-card--success', isPositive && s.netCashFlow !== 0);
       this.elements.cashFlowCard?.classList.toggle('stat-card--danger', !isPositive);
+    }
+
+    // Net Cash Flow subtitle with colored deposits/withdrawals
+    const cashFlowSub = this.elements.cashFlowCard?.querySelector('.stat-card__sub');
+    if (cashFlowSub) {
+      cashFlowSub.innerHTML = `(<span class="stat-card__sub--success-glow">Deposits</span> - <span class="stat-card__sub--danger">withdrawals</span>)`;
     }
   }
 
@@ -723,6 +755,24 @@ class Stats {
     return `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   }
 
+  formatDateShort(dateStr) {
+    if (!dateStr) return '';
+
+    // Parse YYYY-MM-DD string
+    const [year, month, day] = dateStr.split('-').map(Number);
+
+    // Format as "MM/DD/YYYY"
+    return `${month}/${day}/${year}`;
+  }
+
+  formatNumberShort(num) {
+    // Format with thousands separator but no decimals
+    return Math.abs(num).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    });
+  }
+
   /**
    * Start auto-refreshing prices (every 60 seconds)
    * Called when stats page becomes active
@@ -742,7 +792,7 @@ class Stats {
     // Set up 60-second interval
     this.autoRefreshInterval = setInterval(() => {
       this.refreshPrices(true);
-    }, 60000); // 60 seconds
+    }, AUTO_REFRESH_INTERVAL_MS);
 
     console.log('[Stats] Started auto-refresh (60s interval)');
   }
@@ -921,6 +971,143 @@ class Stats {
    */
   _getEntryDateString(trade) {
     return getTradeEntryDateString(trade);
+  }
+
+  /**
+   * Handle calendar day click
+   * Displays trades for the selected date (or week range for Saturday) using shared journal table renderer
+   * @param {string} dateStr - Date string in YYYY-MM-DD format
+   * @param {Object|null} weekRange - Optional week range { from, to } for Saturday clicks
+   */
+  async handleCalendarDayClick(dateStr, weekRange = null) {
+    this.selectedDate = dateStr;
+    this.selectedWeekRange = weekRange; // Store for later use when opening trades
+
+    const allTrades = state.journal.entries;
+    let tradesFiltered;
+
+    if (weekRange) {
+      // Filter trades within the week range (Monday through Friday)
+      tradesFiltered = allTrades.filter(trade => {
+        const entryDateStr = this._getEntryDateString(trade);
+        return entryDateStr >= weekRange.from && entryDateStr <= weekRange.to;
+      });
+    } else {
+      // Filter trades for single day
+      tradesFiltered = allTrades.filter(trade => {
+        const entryDateStr = this._getEntryDateString(trade);
+        return entryDateStr === dateStr;
+      });
+    }
+
+    // Update date range display
+    const dateRangeContainer = document.getElementById('selectedDayDateRange');
+    if (dateRangeContainer) {
+      // Format date range
+      let dateRangeText;
+      if (weekRange) {
+        const fromFormatted = this.formatDateDisplay(weekRange.from);
+        const toFormatted = this.formatDateDisplay(weekRange.to);
+        dateRangeText = `${fromFormatted} - ${toFormatted}`;
+      } else {
+        dateRangeText = this.formatDateDisplay(dateStr);
+      }
+      dateRangeContainer.textContent = dateRangeText;
+    }
+
+    // Update trades table
+    const tradesContainer = document.getElementById('selectedDayTrades');
+    if (tradesContainer) {
+      if (tradesFiltered.length === 0) {
+        const emptyMessage = weekRange
+          ? 'No trades opened during this week'
+          : 'No trades opened on this day';
+        tradesContainer.innerHTML = `
+          <div class="selected-day-trades__empty">
+            ${emptyMessage}
+          </div>
+        `;
+      } else {
+        // Use shared journal table renderer (single source of truth!)
+        const tradesHTML = await renderJournalTableRows(tradesFiltered, {
+          shouldAnimate: false,
+          expandedRows: new Set()
+        });
+
+        tradesContainer.innerHTML = `
+          <table class="journal-table journal-table--stats">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Ticker</th>
+                <th>Options</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th>Shares</th>
+                <th>P&L $</th>
+                <th>P&L %</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tradesHTML}
+            </tbody>
+          </table>
+        `;
+
+        // Add click handlers to open journal entries with date filter preserved
+        tradesContainer.querySelectorAll('tbody tr').forEach(row => {
+          row.addEventListener('click', (e) => {
+            const tradeId = parseInt(row.dataset.id); // Note: dataset.id not dataset.tradeId
+            // Pass week range if this was a weekly selection
+            if (weekRange) {
+              this.openTradeInJournal(tradeId, null, weekRange);
+            } else {
+              this.openTradeInJournal(tradeId, dateStr);
+            }
+          });
+        });
+      }
+    }
+  }
+
+  /**
+   * Open a trade in the journal view
+   * @param {number} tradeId - ID of the trade to open
+   * @param {string} dateStr - Optional date string to filter to (if coming from calendar day click)
+   * @param {Object} weekRange - Optional week range { from, to } for weekly selections
+   */
+  openTradeInJournal(tradeId, dateStr = null, weekRange = null) {
+    // Set filters BEFORE navigation using centralized method
+    if (weekRange) {
+      journalView.applyFiltersFromExternal({
+        dateFrom: weekRange.from,
+        dateTo: weekRange.to,
+        resetToDefaults: true
+      });
+    } else if (dateStr) {
+      journalView.applyFiltersFromExternal({
+        dateFrom: dateStr,
+        dateTo: dateStr,
+        resetToDefaults: true
+      });
+    } else {
+      journalView.dateRangeFilter.clearFilters();
+      journalView.handleDatePreset('max');
+      journalView.filterPopup?.updateFilterCount(0);
+    }
+
+    // Navigate to journal (filters are already set)
+    viewManager.navigateTo('journal');
+
+    // Wait for navigation and then expand the trade row
+    setTimeout(() => {
+      journalView.toggleRowExpand(tradeId);
+      const row = document.querySelector(`.journal-table__row[data-id="${tradeId}"]`);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, SCROLL_DELAY_MS);
   }
 }
 

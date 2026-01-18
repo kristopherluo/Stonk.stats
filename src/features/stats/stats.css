@@ -8,7 +8,7 @@
   display: none;
   flex-direction: column;
   padding: var(--space-6);
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
   width: 100%;
   flex: 1;
@@ -46,7 +46,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-6);
+  margin-bottom: 4px;
 }
 
 .stats-header__left {
@@ -106,6 +106,101 @@
   background: var(--bg-surface);
 }
 
+/* === Stats Layout (Two-column with calendar) === */
+
+/* Stats Overview Container - Filters, Stats Cards, and Equity Curve */
+.stats-overview-container {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-6);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Top row: Stats cards + Equity curve side-by-side */
+.stats-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-6);
+  align-items: stretch;
+}
+
+.stats-cards-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  justify-content: center;
+  align-self: center;
+  margin-top: var(--space-3);
+}
+
+.stats-chart-column {
+  min-height: 90px;
+  display: flex;
+  align-items: stretch;
+}
+
+.stats-chart-column .stats-section {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.stats-chart {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.stats-chart__container {
+  position: relative;
+  width: 100%;
+  height: 260px;
+}
+
+/* Stats Details Container - Calendar and Daily Trades */
+.stats-details-container {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-5);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.stats-details-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.stats-calendar-column {
+  min-width: 0;
+}
+
+.stats-trades-column {
+  min-width: 0;
+}
+
+/* Responsive: Stack vertically on smaller screens */
+@media (max-width: 1200px) {
+  .stats-top-row,
+  .stats-details-row {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-chart-column {
+    min-height: 90px;
+  }
+}
+
 /* === Stats Sections === */
 
 .stats-section {
@@ -116,7 +211,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
 }
 
 .stats-section__title {
@@ -162,6 +257,7 @@
   border: 1px solid rgba(139, 92, 246, 0.3);
   border-radius: var(--border-radius-lg);
   padding: var(--space-5);
+  min-height: 110px;
   transition: all var(--transition-base);
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.7),
@@ -404,12 +500,6 @@
     0 0 16px rgba(139, 92, 246, 0.25);
 }
 
-.stats-chart__container {
-  position: relative;
-  width: 100%;
-  height: 300px;
-}
-
 .stats-chart__canvas {
   width: 100%;
   height: 100%;
@@ -435,6 +525,115 @@
 
 .stats-chart__empty-text {
   font-size: var(--text-sm);
+}
+
+/* === Selected Day Trades Section === */
+
+.selected-day-trades {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.05) 0%, transparent 60%),
+    linear-gradient(145deg, #0a0a0a 0%, #000000 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: var(--border-radius-lg);
+  height: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.7),
+    0 0 24px rgba(139, 92, 246, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.05);
+}
+
+.selected-day-trades__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: center;
+  padding: var(--space-6);
+}
+
+/* Journal table inside stats should match journal styling */
+.selected-day-trades .journal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.selected-day-trades .journal-table th,
+.selected-day-trades .journal-table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: center;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.selected-day-trades .journal-table th {
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: var(--text-xs);
+  background: var(--bg-elevated);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.selected-day-trades .journal-table td {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.selected-day-trades .journal-table tbody tr {
+  transition: background var(--transition-fast);
+  cursor: pointer;
+}
+
+.selected-day-trades .journal-table tbody tr.journal-row--closed-winner {
+  background:
+    radial-gradient(circle at 0% 50%, rgba(34, 197, 94, 0.15) 0%, transparent 70%),
+    rgba(34, 197, 94, 0.12);
+  border-left: 3px solid rgba(34, 197, 94, 0.5);
+  box-shadow: inset 0 0 20px rgba(34, 197, 94, 0.08);
+}
+
+.selected-day-trades .journal-table tbody tr.journal-row--closed-loser {
+  background:
+    radial-gradient(circle at 0% 50%, rgba(239, 68, 68, 0.18) 0%, transparent 70%),
+    rgba(239, 68, 68, 0.15);
+  border-left: 3px solid rgba(239, 68, 68, 0.5);
+  box-shadow: inset 0 0 20px rgba(239, 68, 68, 0.08);
+}
+
+.selected-day-trades .journal-table tbody tr:hover {
+  background:
+    radial-gradient(circle at 0% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+    var(--bg-hover);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.1);
+}
+
+.selected-day-trades .journal-table tbody tr.journal-row--closed-winner:hover {
+  background:
+    radial-gradient(circle at 0% 50%, rgba(34, 197, 94, 0.22) 0%, transparent 70%),
+    rgba(34, 197, 94, 0.18);
+  border-left: 3px solid rgba(34, 197, 94, 0.7);
+  box-shadow:
+    0 0 20px rgba(34, 197, 94, 0.2),
+    inset 0 0 25px rgba(34, 197, 94, 0.12);
+}
+
+.selected-day-trades .journal-table tbody tr.journal-row--closed-loser:hover {
+  background:
+    radial-gradient(circle at 0% 50%, rgba(239, 68, 68, 0.25) 0%, transparent 70%),
+    rgba(239, 68, 68, 0.22);
+  border-left: 3px solid rgba(239, 68, 68, 0.7);
+  box-shadow:
+    0 0 20px rgba(239, 68, 68, 0.2),
+    inset 0 0 25px rgba(239, 68, 68, 0.12);
 }
 
 /* === Stats Empty State === */
@@ -535,4 +734,88 @@
 .journal-view.view--active,
 .stats-view.view--active {
   display: flex;
+}
+
+/* Opened Trades Date Range - above the trades container */
+.selected-day-trades__date-range {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+/* Hide specific columns in stats page trades table */
+.journal-table--stats tbody tr td:nth-child(7),  /* Size % */
+.journal-table--stats tbody tr td:nth-child(10), /* R */
+.journal-table--stats tbody tr td:nth-child(11), /* Industry */
+.journal-table--stats tbody tr td:nth-child(12)  /* Type */ {
+  display: none;
+}
+
+/* Apply P&L colors to stats page trades table (matching journal page) */
+.stats-view .journal-table td.journal-table__pnl--positive {
+  color: var(--success);
+  font-weight: var(--font-semibold);
+  text-shadow:
+    0 0 6px rgba(34, 197, 94, 0.5),
+    0 0 12px rgba(34, 197, 94, 0.25);
+}
+
+.stats-view .journal-table td.journal-table__pnl--negative {
+  color: var(--danger);
+  font-weight: var(--font-semibold);
+  text-shadow:
+    0 0 6px rgba(239, 68, 68, 0.5),
+    0 0 12px rgba(239, 68, 68, 0.25);
+}
+
+/* Column styling matching journal page */
+
+/* Date column (1st) - blue glow */
+.stats-view .journal-table td:nth-child(1) {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.6),
+    0 0 16px rgba(96, 165, 250, 0.3);
+}
+
+/* Ticker column (2nd) - gradient shimmer */
+.stats-view .journal-table td:nth-child(2) {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 60%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.05em;
+  filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.4));
+  animation: tickerShimmer 3s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+
+/* Options column (3rd) - blue glow */
+.stats-view .journal-table td:nth-child(3) {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.6),
+    0 0 16px rgba(96, 165, 250, 0.3);
+}
+
+/* Entry column (4th) - blue glow */
+.stats-view .journal-table td:nth-child(4) {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.6),
+    0 0 16px rgba(96, 165, 250, 0.3);
+}
+
+/* Shares column (6th) - blue glow */
+.stats-view .journal-table td:nth-child(6) {
+  text-shadow:
+    0 0 8px rgba(96, 165, 250, 0.6),
+    0 0 16px rgba(96, 165, 250, 0.3);
+}
+
+@keyframes tickerShimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }

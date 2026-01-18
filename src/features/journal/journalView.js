@@ -13,6 +13,7 @@ import { priceTracker } from '../../core/priceTracker.js';
 import { showToast } from '../../components/ui/ui.js';
 import { DateRangeFilter } from '../../shared/DateRangeFilter.js';
 import { FilterPopup } from '../../shared/FilterPopup.js';
+import { renderJournalTableRows } from '../../shared/journalTableRenderer.js';
 
 class JournalView {
   constructor() {
@@ -373,6 +374,55 @@ class JournalView {
     this.render();
   }
 
+  /**
+   * Apply filters and UI state for navigation from other views
+   * Centralizes the logic for setting filters programmatically
+   */
+  applyFiltersFromExternal({ dateFrom, dateTo, resetToDefaults = true }) {
+    if (resetToDefaults) {
+      // Set status to 'all'
+      this.elements.statusBtns?.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.status === 'all');
+      });
+
+      // Check all type checkboxes
+      this.elements.typeCheckboxes?.forEach(checkbox => {
+        checkbox.checked = true;
+      });
+      if (this.elements.allTypesCheckbox) {
+        this.elements.allTypesCheckbox.checked = true;
+        this.elements.allTypesCheckbox.indeterminate = false;
+      }
+
+      // Set internal filter state
+      this.filters.status = 'all';
+      this.filters.types = ['ep', 'long-term', 'base', 'breakout', 'bounce', 'other'];
+    }
+
+    // Set date range
+    if (dateFrom && dateTo) {
+      const [fromYear, fromMonth, fromDay] = dateFrom.split('-').map(Number);
+      const [toYear, toMonth, toDay] = dateTo.split('-').map(Number);
+      const fromDate = new Date(fromYear, fromMonth - 1, fromDay);
+      const toDate = new Date(toYear, toMonth - 1, toDay);
+
+      if (this.dateFromPicker && this.dateToPicker) {
+        this.dateFromPicker.setDate(fromDate, false);
+        this.dateToPicker.setDate(toDate, false);
+
+        if (this.elements.dateFrom) this.elements.dateFrom.classList.add('preset-value');
+        if (this.elements.dateTo) this.elements.dateTo.classList.add('preset-value');
+      }
+
+      this.dateRangeFilter.setFilter(dateFrom, dateTo);
+    }
+
+    // Update filter count
+    if (this.filterPopup) {
+      this.filterPopup.updateFilterCount((dateFrom || dateTo) ? 1 : 0);
+    }
+  }
+
   selectAllTypes() {
     // Reset status to "all"
     this.elements.statusBtns?.forEach(btn => {
@@ -683,176 +733,36 @@ class JournalView {
     const shouldAnimate = !this.hasAnimated;
     this.hasAnimated = true;
 
-    // Fetch all company data upfront with rate limiting
-    const companyDataMap = new Map();
+    // Use shared journal table renderer (single source of truth!)
+    const rowsHTML = await renderJournalTableRows(trades, {
+      shouldAnimate,
+      expandedRows: this.expandedRows
+    });
 
-    // Get unique tickers to avoid duplicate fetches
-    const uniqueTickers = [...new Set(trades.map(t => t.ticker))];
-
-    // Fetch company data for each ticker
-    for (const ticker of uniqueTickers) {
-      let data = await priceTracker.getCachedCompanyData(ticker);
-
-      // If we have data but it's missing industry (only has summary from Alpha Vantage),
-      // fetch the full profile from Finnhub
-      if (data && !data.industry) {
-        const profile = await priceTracker.fetchCompanyProfile(ticker);
-        if (profile) {
-          data = profile;
-        }
-        await new Promise(resolve => setTimeout(resolve, 200)); // Rate limit delay
-      } else if (!data) {
-        // No data at all, try to fetch profile
-        const profile = await priceTracker.fetchCompanyProfile(ticker);
-        if (profile) {
-          data = profile;
-        }
-        await new Promise(resolve => setTimeout(resolve, 200)); // Rate limit delay
-      }
-
-      if (data && data.industry) {
-        companyDataMap.set(ticker, data);
-      }
-    }
-
-    this.elements.tableBody.innerHTML = trades.map((trade, index) => {
-      const pnl = getTradeRealizedPnL(trade);
-      const hasPnL = trade.status === 'closed' || trade.status === 'trimmed';
-      const shares = trade.remainingShares ?? trade.shares;
-      const sharesDisplay = trade.originalShares
-        ? `${shares}/${trade.originalShares}`
-        : shares;
-
-      // Calculate R-multiple
-      let rMultiple = null;
-      if (hasPnL && trade.riskDollars > 0) {
-        rMultiple = pnl / trade.riskDollars;
-      }
-
-      // Calculate P&L % based on position cost
-      let pnlPercent = null;
-      if (hasPnL) {
-        const totalShares = trade.originalShares || trade.shares;
-        const positionCost = trade.entry * totalShares;
-        if (positionCost > 0) {
-          pnlPercent = (pnl / positionCost) * 100;
-        }
-      }
-
-      // Calculate position size as % of account
-      let positionPercent = null;
-      if (trade.status === 'open' || trade.status === 'trimmed') {
-        const accountSize = state.account.currentSize;
-        const positionValue = shares * trade.entry;
-        if (accountSize > 0) {
-          positionPercent = (positionValue / accountSize) * 100;
-        }
-      }
-
-      // Check if trade is "free rolled" - realized profit covers remaining risk
-      const isTrimmed = trade.status === 'trimmed';
-      const realizedPnL = trade.totalRealizedPnL || 0;
-      const currentRisk = shares * (trade.entry - trade.stop);
-
-      // Determine display status
-      let statusClass = trade.status;
-      let statusText = trade.status.charAt(0).toUpperCase() + trade.status.slice(1);
-
+    // Generate expanded details rows (these are journal-view specific)
+    const detailsArray = trades.map(trade => {
       const isExpanded = this.expandedRows.has(trade.id);
-      const animationDelay = shouldAnimate ? `animation-delay: ${index * 40}ms;` : '';
-
-      // Determine row background class for closed trades
-      let rowBgClass = '';
-      if (trade.status === 'closed') {
-        const tradePnL = getTradeRealizedPnL(trade);
-        if (tradePnL > 0) {
-          rowBgClass = 'journal-row--closed-winner';
-        } else if (tradePnL < 0) {
-          rowBgClass = 'journal-row--closed-loser';
-        }
-      }
-
-      // Determine exit price class
-      let exitPriceClass = '';
-      if (trade.exitPrice) {
-        const priceDiff = trade.exitPrice - trade.entry;
-        if (Math.abs(priceDiff) < 0.01) {
-          exitPriceClass = ''; // Breakeven - default white
-        } else if (priceDiff > 0) {
-          exitPriceClass = 'journal-table__pnl--positive'; // Green for profit
-        } else {
-          exitPriceClass = 'journal-table__pnl--negative'; // Red for loss
-        }
-      }
-
-      // Format option details if this is an options trade
-      let optionDisplay = '—';
-      if (trade.assetType === 'options' && trade.strike && trade.expirationDate) {
-        const strike = trade.strike;
-        const optionSymbol = trade.optionType === 'put' ? 'P' : 'C';
-        // Format expiration as MM/DD/YY (e.g., 1/16/26)
-        const expDate = new Date(trade.expirationDate + 'T00:00:00');
-        const month = expDate.getMonth() + 1;
-        const day = expDate.getDate();
-        const year = expDate.getFullYear().toString().slice(-2);
-        const formattedExp = `${month}/${day}/${year}`;
-        optionDisplay = `<span class="journal-option-glow">${strike}${optionSymbol} ${formattedExp}</span>`;
-      }
-
-      // Get company data for industry badge from the Map we fetched earlier
-      const companyData = companyDataMap.get(trade.ticker);
-      const industry = companyData?.industry || '';
-
-      // Get trade type for badge
-      const setupType = trade.thesis?.setupType;
-      const typeLabels = {
-        'long-term': 'Long-term',
-        'base': 'Base',
-        'breakout': 'Breakout',
-        'bounce': 'Bounce',
-        'other': 'Other'
-      };
-      const formattedSetupType = setupType ? (typeLabels[setupType] || setupType.replace(/\b\w/g, l => l.toUpperCase())) : '';
-
       return `
-        <tr class="journal-table__row ${shouldAnimate ? 'journal-row--animate' : ''} ${rowBgClass}" data-id="${trade.id}" style="${animationDelay}">
-          <td>${formatDate(trade.timestamp)}</td>
-          <td><strong>${trade.ticker}</strong></td>
-          <td>${optionDisplay}</td>
-          <td style="color: var(--primary);">${formatCurrency(trade.entry)}</td>
-          <td class="${exitPriceClass}">${trade.exitPrice ? formatCurrency(trade.exitPrice) : '—'}</td>
-          <td>${sharesDisplay}</td>
-          <td>${positionPercent !== null ? `${positionPercent.toFixed(2)}%` : '—'}</td>
-          <td class="${hasPnL ? (pnl >= 0 ? 'journal-table__pnl--positive' : 'journal-table__pnl--negative') : ''}">
-            ${hasPnL ? `${pnl >= 0 ? '+' : ''}${formatCurrency(pnl)}` : '—'}
-          </td>
-          <td class="${hasPnL ? (pnlPercent >= 0 ? 'journal-table__pnl--positive' : 'journal-table__pnl--negative') : ''}">
-            ${pnlPercent !== null ? `${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%` : '—'}
-          </td>
-          <td class="${rMultiple !== null ? (rMultiple >= 0 ? 'journal-table__pnl--positive' : 'journal-table__pnl--negative') : ''}">
-            ${rMultiple !== null ? (Math.abs(rMultiple) < 0.05 ? '<span class="tag tag--breakeven">BE</span>' : `${rMultiple >= 0 ? '+' : ''}${rMultiple.toFixed(1)}R`) : '—'}
-          </td>
-          <td>
-            ${industry ? `<span class="position-card__badge position-card__badge--industry">${industry}</span>` : '—'}
-          </td>
-          <td>
-            ${formattedSetupType ? `<span class="position-card__badge position-card__badge--type">${formattedSetupType}</span>` : '—'}
-          </td>
-          <td>
-            <span class="journal-table__status journal-table__status--${statusClass}">
-              ${statusText}
-            </span>
-          </td>
-        </tr>
         <tr class="journal-table__row-details ${isExpanded ? 'expanded' : ''}" data-details-id="${trade.id}">
           <td colspan="13">
             ${this.renderRowDetails(trade)}
           </td>
         </tr>
       `;
+    });
+
+    // Split rows into array
+    const rowsArray = rowsHTML.split('</tr>').filter(row => row.trim()).map(row => row + '</tr>');
+
+    // Interleave rows and details
+    const allHTML = trades.map((trade, index) => {
+      const rowHTML = rowsArray[index] || '';
+      const detailHTML = detailsArray[index] || '';
+      return rowHTML + detailHTML;
     }).join('');
 
-    // Bind row actions
+    this.elements.tableBody.innerHTML = allHTML;
+
     this.bindRowActions();
   }
 
