@@ -3,7 +3,7 @@
  */
 
 import { state } from '../../core/state.js';
-import { parseNumber, formatCurrency, formatWithCommas, initFlatpickr, getCurrentWeekday, restrictToNumberInput, formatDate } from '../../core/utils.js';
+import { parseNumber, formatCurrency, formatWithCommas, initFlatpickr, getCurrentWeekday, restrictToNumberInput } from '../../core/utils.js';
 import { showToast } from '../../components/ui/ui.js';
 import { dataManager } from '../../core/dataManager.js';
 import { clearDataModal } from '../../components/modals/clearDataModal.js';
@@ -13,6 +13,8 @@ import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 import { getStorageUsage, formatBytes, getStorageBreakdownPercent } from '../../utils/storageMonitor.js';
 import { storage } from '../../utils/storage.js';
 import eodCacheManager from '../../core/eodCacheManager.js';
+import { formatDate } from '../../utils/marketHours.js';
+import { StatsCalculator } from '../stats/StatsCalculator.js';
 
 class Settings {
   constructor() {
@@ -24,6 +26,8 @@ class Settings {
     this.previousValidAccountSize = null;
     // Store event listener unsubscribe functions for cleanup
     this.eventUnsubscribers = [];
+    // Stats calculator for consistent account calculations
+    this.statsCalculator = new StatsCalculator();
   }
 
   async init() {
@@ -81,6 +85,14 @@ class Settings {
     // Listen for settings changes (starting account size)
     this.eventUnsubscribers.push(
       state.on('settingsChanged', () => {
+        const unrealizedPnL = this.updateAccountDisplay(state.account.currentSize);
+        this.updateSummary(unrealizedPnL);
+      })
+    );
+
+    // Listen for EOD data being saved (so we can update header with correct values)
+    this.eventUnsubscribers.push(
+      state.on('eodDataSaved', () => {
         const unrealizedPnL = this.updateAccountDisplay(state.account.currentSize);
         this.updateSummary(unrealizedPnL);
       })
@@ -569,7 +581,7 @@ class Settings {
   }
 
   updateSummary(cachedUnrealizedPnL = null) {
-    // Use shared account balance calculator for consistency with header display
+    // Use shared calculator - single source of truth
     const currentPrices = priceTracker.getPricesAsObject();
     const result = accountBalanceCalculator.calculateCurrentBalance({
       startingBalance: state.settings.startingAccountSize,
@@ -581,7 +593,7 @@ class Settings {
     const starting = state.settings.startingAccountSize;
     const realizedPnL = result.realizedPnL;
     const unrealizedPnL = result.unrealizedPnL;
-    const cashFlow = result.netCashFlow;
+    const cashFlow = result.cashFlow;
     const current = result.balance;
 
     if (this.elements.summaryStarting) {
@@ -612,17 +624,17 @@ class Settings {
   }
 
   updateAccountDisplay(size) {
-    // Use shared account balance calculator (same logic as Stats page)
-    const currentPrices = priceTracker.getPricesAsObject();
+    // Use shared calculator - single source of truth
+    const totalAccount = this.statsCalculator.calculateCurrentAccount();
 
+    // Get unrealized P&L for summary
+    const currentPrices = priceTracker.getPricesAsObject();
     const result = accountBalanceCalculator.calculateCurrentBalance({
       startingBalance: state.settings.startingAccountSize,
       allTrades: state.journal.entries,
       cashFlowTransactions: state.cashFlow.transactions,
       currentPrices
     });
-
-    const totalAccount = result.balance;
     const unrealizedPnL = result.unrealizedPnL;
 
     if (this.elements.headerAccountValue) {

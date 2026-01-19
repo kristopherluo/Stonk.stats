@@ -415,8 +415,9 @@ class Stats {
     const allEntries = state.journal.entries;
     const filterState = this.filters.getActiveFilter();
 
-    // Build equity curve FIRST to ensure cache is up to date for P&L calculation
-    await equityCurveManager.buildEquityCurve(filterState.dateFrom, filterState.dateTo);
+    // Build FULL equity curve (no filters) to ensure accurate balance calculations
+    // Filtering happens at display level, not calculation level
+    await equityCurveManager.buildEquityCurve(null, null);
 
     // Get filtered trades
     const filteredTrades = this.filters.getFilteredTrades(allEntries);
@@ -608,14 +609,11 @@ class Stats {
 
       const filterState = this.filters.getActiveFilter();
 
-      // Build equity curve (uses cache if available!)
-      const curveObject = await equityCurveManager.buildEquityCurve(
-        filterState.dateFrom,
-        filterState.dateTo
-      );
+      // Build full equity curve (no filters) for accurate calculations
+      const curveObject = await equityCurveManager.buildEquityCurve(null, null);
 
       // Convert object to array format for chart
-      const curveData = Object.entries(curveObject)
+      let curveData = Object.entries(curveObject)
         .map(([date, data]) => ({
           date,
           balance: data.balance,
@@ -625,6 +623,20 @@ class Stats {
           cashFlow: data.cashFlow
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
+
+      // Filter curve data for display (after calculation)
+      if (filterState.dateFrom || filterState.dateTo) {
+        curveData = curveData.filter(point => {
+          let inRange = true;
+          if (filterState.dateFrom) {
+            inRange = inRange && point.date >= filterState.dateFrom;
+          }
+          if (filterState.dateTo) {
+            inRange = inRange && point.date <= filterState.dateTo;
+          }
+          return inRange;
+        });
+      }
 
       this.chart.setData(curveData);
       this.chart.render();
@@ -864,9 +876,17 @@ class Stats {
       // Only save if:
       // 1. It's after market close (after 4pm EST, before next 9:30am EST)
       // 2. We haven't already saved data for this trading day
-      if (isAfterClose && !eodCacheManager.hasEODData(tradingDay)) {
+      // 3. The market was actually open today (not a holiday/weekend)
+      //    - We check this by seeing if tradingDay matches current weekday
+      //    - On holidays/weekends, getTradingDay() returns a past date
+      const currentWeekday = marketHours.formatDate(marketHours.getCurrentWeekday());
+      const isActualTradingDay = tradingDay === currentWeekday;
+
+      if (isAfterClose && !eodCacheManager.hasEODData(tradingDay) && isActualTradingDay) {
         console.log(`[Stats] Market closed, saving EOD snapshot for ${tradingDay}`);
         await this.saveEODSnapshot(tradingDay);
+      } else if (isAfterClose && !isActualTradingDay) {
+        console.log(`[Stats] Not saving EOD for ${tradingDay} because current day is ${currentWeekday} (holiday/weekend)`);
       }
     } catch (error) {
       console.error('[Stats] Error checking/saving EOD:', error);

@@ -52,14 +52,19 @@ export async function renderJournalTableRows(trades, options = {}) {
     // Calculate R-multiple
     let rMultiple = null;
     if (hasPnL && trade.riskDollars > 0) {
-      rMultiple = pnl / trade.riskDollars;
+      // For options, riskDollars doesn't include the 100 multiplier
+      // so we need to multiply it to get the actual dollar risk
+      const multiplier = trade.assetType === 'options' ? 100 : 1;
+      const actualRiskDollars = trade.riskDollars * multiplier;
+      rMultiple = pnl / actualRiskDollars;
     }
 
     // Calculate P&L % based on position cost
     let pnlPercent = null;
     if (hasPnL) {
       const totalShares = trade.originalShares || trade.shares;
-      const positionCost = trade.entry * totalShares;
+      const multiplier = trade.assetType === 'options' ? 100 : 1;
+      const positionCost = trade.entry * totalShares * multiplier;
       if (positionCost > 0) {
         pnlPercent = (pnl / positionCost) * 100;
       }

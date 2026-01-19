@@ -8,6 +8,7 @@ import { priceTracker } from '../../core/priceTracker.js';
 import { equityCurveManager } from './EquityCurveManager.js';
 import { getPreviousBusinessDay, getCurrentWeekday } from '../../core/utils.js';
 import { formatDate } from '../../utils/marketHours.js';
+import eodCacheManager from '../../core/eodCacheManager.js';
 import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 import { calculateRealizedPnL, getTradeRealizedPnL } from '../../core/utils/tradeCalculations.js';
 
@@ -18,10 +19,17 @@ export class StatsCalculator {
    * NOW USES SHARED CALCULATOR
    */
   calculateCurrentAccount() {
-    // Get current prices from priceTracker
+    // Check if we have today's complete EOD snapshot (after market close)
+    const todayStr = formatDate(getCurrentWeekday());
+    const eodData = eodCacheManager.getEODData(todayStr);
+
+    if (eodData && !eodData.incomplete) {
+      return eodData.balance;
+    }
+
+    // Fallback: Calculate with live prices (during market hours before EOD saved)
     const currentPrices = priceTracker.getPricesAsObject();
 
-    // Use shared account balance calculator
     const result = accountBalanceCalculator.calculateCurrentBalance({
       startingBalance: state.settings.startingAccountSize,
       allTrades: state.journal.entries,

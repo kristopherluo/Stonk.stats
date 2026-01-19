@@ -30,6 +30,7 @@ class JournalView {
     this.sortDirection = 'desc';
     this.expandedRows = new Set();
     this.hasAnimated = false;
+    this.isRendering = false; // Guard against overlapping renders
     // Store flatpickr instances
     this.dateFromPicker = null;
     this.dateToPicker = null;
@@ -567,31 +568,41 @@ class JournalView {
   }
 
   async render() {
-    const trades = this.getFilteredTrades();
-
-    // Update count to show filtered trades
-    if (this.elements.journalCount) {
-      this.elements.journalCount.textContent = trades.length;
+    // Guard against overlapping renders
+    if (this.isRendering) {
+      return;
     }
+    this.isRendering = true;
 
-    // Update filter displays
-    this.updateFilterDisplays();
-
-    // Render summary bar with filtered trades
-    this.renderSummary(trades);
-
-    // Capture animation flag BEFORE any async work to prevent race conditions
+    // Capture animation flag IMMEDIATELY to prevent race conditions
     const shouldAnimate = !this.hasAnimated;
     if (shouldAnimate) {
       this.hasAnimated = true;
     }
 
-    // Show empty state or table
-    if (trades.length === 0) {
-      this.showEmptyState();
-    } else {
-      this.hideEmptyState();
-      await this.renderTable(trades, shouldAnimate);
+    try {
+      const trades = this.getFilteredTrades();
+
+      // Update count to show filtered trades
+      if (this.elements.journalCount) {
+        this.elements.journalCount.textContent = trades.length;
+      }
+
+      // Update filter displays
+      this.updateFilterDisplays();
+
+      // Render summary bar with filtered trades
+      this.renderSummary(trades);
+
+      // Show empty state or table
+      if (trades.length === 0) {
+        this.showEmptyState();
+      } else {
+        this.hideEmptyState();
+        await this.renderTable(trades, shouldAnimate);
+      }
+    } finally {
+      this.isRendering = false;
     }
   }
 

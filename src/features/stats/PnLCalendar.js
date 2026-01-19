@@ -103,7 +103,7 @@ class PnLCalendar {
 
   /**
    * Calculate P&L data for all days in the current month
-   * Uses equity curve and EOD cache
+   * Reads directly from EOD cache to avoid conflicts with stats page date filters
    */
   async calculateMonthData() {
     if (this.isCalculating) return;
@@ -126,13 +126,15 @@ class PnLCalendar {
         const prevDate = this._getPreviousBusinessDay(day.date);
         const prevDateStr = prevDate ? marketHours.formatDate(prevDate) : null;
 
-        // Get balance for this day from equity curve
-        const balance = equityCurveManager.getBalanceOnDate(dateStr);
-
-        if (balance === null) {
-          // No data for this day
+        // Get balance for this day from EOD cache (not equity curve manager)
+        // This ensures we get unfiltered data regardless of stats page date filter
+        const eodData = eodCacheManager.getEODData(dateStr);
+        if (!eodData || eodData.incomplete) {
           continue;
         }
+
+        const balance = eodData.balance;
+        const cashFlow = eodData.cashFlow || 0;
 
         // Get previous day balance
         let prevBalance;
@@ -140,15 +142,13 @@ class PnLCalendar {
           // First trading day - use starting account size
           prevBalance = startingAccountSize;
         } else {
-          prevBalance = equityCurveManager.getBalanceOnDate(prevDateStr);
-          if (prevBalance === null) {
+          const prevEodData = eodCacheManager.getEODData(prevDateStr);
+          if (prevEodData && !prevEodData.incomplete) {
+            prevBalance = prevEodData.balance;
+          } else {
             prevBalance = startingAccountSize;
           }
         }
-
-        // Get cash flow for this day (deposits/withdrawals)
-        const eodData = eodCacheManager.getEODData(dateStr);
-        const cashFlow = eodData?.cashFlow || 0;
 
         // Calculate daily P&L: balance change minus cash flow
         const dailyPnL = balance - prevBalance - cashFlow;
@@ -273,8 +273,38 @@ class PnLCalendar {
       // Format P&L value
       const pnlDisplay = pnlValue !== null && pnlValue !== undefined ? this._formatPnL(pnlValue) : '';
 
+      // Build tooltip with detailed information
+      let tooltipText = '';
+      if (dayData && !isSaturday) {
+        const parts = [];
+
+        // Add P&L line
+        if (pnlValue !== null && pnlValue !== undefined) {
+          const pnlFormatted = pnlValue >= 0 ? `+$${Math.abs(pnlValue).toFixed(2)}` : `-$${Math.abs(pnlValue).toFixed(2)}`;
+          parts.push(`Trading P&L: ${pnlFormatted}`);
+        }
+
+        // Add cash flow line if non-zero
+        if (dayData.cashFlow && Math.abs(dayData.cashFlow) >= 0.01) {
+          const cashFlowFormatted = dayData.cashFlow >= 0 ? `+$${Math.abs(dayData.cashFlow).toFixed(2)}` : `-$${Math.abs(dayData.cashFlow).toFixed(2)}`;
+          const cashFlowLabel = dayData.cashFlow >= 0 ? 'Deposit' : 'Withdrawal';
+          parts.push(`${cashFlowLabel}: ${cashFlowFormatted}`);
+        }
+
+        // Add balance line
+        if (dayData.balance !== null && dayData.balance !== undefined) {
+          parts.push(`Balance: $${dayData.balance.toFixed(2)}`);
+        }
+
+        tooltipText = parts.join(' | ');
+      } else if (isSaturday && pnlValue !== null) {
+        // Weekly P&L tooltip
+        const pnlFormatted = pnlValue >= 0 ? `+$${Math.abs(pnlValue).toFixed(2)}` : `-$${Math.abs(pnlValue).toFixed(2)}`;
+        tooltipText = `Weekly P&L: ${pnlFormatted}`;
+      }
+
       return `
-        <div class="${classes.join(' ')}" data-date="${dateStr}">
+        <div class="${classes.join(' ')}" data-date="${dateStr}"${tooltipText ? ` title="${tooltipText}"` : ''}>
           <span class="pnl-calendar__day-number">${day.date.getDate()}</span>
           ${pnlDisplay ? `<span class="pnl-calendar__day-pnl">${pnlDisplay}</span>` : ''}
         </div>

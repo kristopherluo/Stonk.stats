@@ -208,15 +208,27 @@ class AccountBalanceCalculator {
   /**
    * Calculate unrealized P&L using specific prices (for historical dates)
    * @param {Array} trades - Trades open on the date
-   * @param {Object} prices - Map of ticker → price
+   * @param {Object} prices - Map of ticker/optionKey → price
    * @param {string} dateStr - Date string for share count
    * @returns {number} Total unrealized P&L
    * @private
    */
   _calculateUnrealizedPnLWithPrices(trades, prices, dateStr) {
     return trades.reduce((sum, trade) => {
-      const price = prices[trade.ticker];
-      if (!price) return sum;
+      let price;
+
+      if (trade.assetType === 'options') {
+        // For options, lookup by unique key: ticker_strike_expiration_type
+        const optionKey = `${trade.ticker}_${trade.strike}_${trade.expirationDate}_${trade.optionType}`;
+        price = prices[optionKey];
+
+        // If no price found, skip (days without logged-in premium storage)
+        if (!price) return sum;
+      } else {
+        // For stocks, lookup by ticker
+        price = prices[trade.ticker];
+        if (!price) return sum;
+      }
 
       const result = this.calculateTradeUnrealizedPnL(trade, price, dateStr);
       return sum + result.unrealizedPnL;

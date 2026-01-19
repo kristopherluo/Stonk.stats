@@ -126,7 +126,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
   gap: var(--space-6);
-  align-items: stretch;
+  align-items: center;
 }
 
 .stats-cards-column {

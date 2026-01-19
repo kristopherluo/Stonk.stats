@@ -23,6 +23,7 @@ class PositionsView {
     this.filterPopup = null; // Shared filter popup component
     this.autoRefreshInterval = null;
     this.hasAnimated = false;
+    this.isRendering = false; // Guard against overlapping renders
   }
 
   init() {
@@ -303,25 +304,41 @@ class PositionsView {
   }
 
   async render() {
-    const positions = this.getFilteredPositions();
+    // Guard against overlapping renders
+    if (this.isRendering) {
+      return;
+    }
+    this.isRendering = true;
 
-    // Update count to show filtered positions
-    if (this.elements.positionsCount) {
-      this.elements.positionsCount.textContent = positions.length;
+    // Capture animation flag IMMEDIATELY to prevent race conditions
+    const shouldAnimate = !this.hasAnimated;
+    if (shouldAnimate) {
+      this.hasAnimated = true;
     }
 
-    // Update filter displays
-    this.updateFilterDisplays();
+    try {
+      const positions = this.getFilteredPositions();
 
-    // Render risk bar with filtered positions
-    this.renderRiskBar(positions);
+      // Update count to show filtered positions
+      if (this.elements.positionsCount) {
+        this.elements.positionsCount.textContent = positions.length;
+      }
 
-    // Show empty state or grid
-    if (positions.length === 0) {
-      this.showEmptyState();
-    } else {
-      this.hideEmptyState();
-      await this.renderGrid(positions);
+      // Update filter displays
+      this.updateFilterDisplays();
+
+      // Render risk bar with filtered positions
+      this.renderRiskBar(positions);
+
+      // Show empty state or grid
+      if (positions.length === 0) {
+        this.showEmptyState();
+      } else {
+        this.hideEmptyState();
+        await this.renderGrid(positions, shouldAnimate);
+      }
+    } finally {
+      this.isRendering = false;
     }
   }
 
@@ -436,11 +453,8 @@ class PositionsView {
     }
   }
 
-  async renderGrid(positions) {
+  async renderGrid(positions, shouldAnimate) {
     if (!this.elements.grid) return;
-
-    const shouldAnimate = !this.hasAnimated;
-    this.hasAnimated = true;
 
     // Fetch all company data upfront with rate limiting
     const companyDataMap = new Map();

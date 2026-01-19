@@ -68,7 +68,6 @@ class EquityCurveManager {
       let missingDays = eodCacheManager.findMissingDays(startDate, endDate);
 
       if (missingDays.length > 0) {
-        console.log(`[EquityCurve] Fetching historical prices for ${missingDays.length} days`);
         await this._fillMissingEODData(missingDays);
       }
 
@@ -278,7 +277,20 @@ class EquityCurveManager {
    * Returns null if data unavailable
    */
   _getCurvePointForDate(dateStr, todayStr) {
-    // Today: use current prices
+    // Check if EOD data exists for this date (including today after market close)
+    const eodData = eodCacheManager.getEODData(dateStr);
+    if (eodData && !eodData.incomplete) {
+      // Use EOD cache data (works for both past dates and today after market close)
+      return this._createCurvePoint(
+        eodData.balance,
+        eodData.realizedBalance,
+        eodData.unrealizedPnL,
+        eodData.cashFlow,
+        dateStr
+      );
+    }
+
+    // Today (or date) without EOD data: use current/live prices
     if (dateStr === todayStr) {
       // Skip if we have active trades but no price data (prevents $0 unrealized P&L)
       const activeTrades = state.journal.entries.filter(t => t.status === 'open' || t.status === 'trimmed');
@@ -298,19 +310,8 @@ class EquityCurveManager {
       );
     }
 
-    // Past dates: use EOD cache
-    const eodData = eodCacheManager.getEODData(dateStr);
-    if (!eodData || eodData.incomplete) {
-      return null;
-    }
-
-    return this._createCurvePoint(
-      eodData.balance,
-      eodData.realizedBalance,
-      eodData.unrealizedPnL,
-      eodData.cashFlow,
-      dateStr
-    );
+    // Past date without EOD data: skip
+    return null;
   }
 
   /**
@@ -473,6 +474,9 @@ class EquityCurveManager {
     }
 
     console.log(`[EquityCurve] Atomic save: saved ${Object.keys(tempEODData).length} days to cache`);
+
+    // Emit event so header/settings can recalculate with new EOD data
+    state.emit('eodDataSaved', { days: Object.keys(tempEODData) });
   }
 
   /**
@@ -482,18 +486,75 @@ class EquityCurveManager {
     // Get trades open on this day
     const openTrades = this._getTradesOpenOnDate(dateStr);
 
-    // Get EOD prices for each ticker
-    const stockPrices = {};
+    // Check if this is today (to fetch live option prices)
+    const todayStr = marketHours.formatDate(getCurrentWeekday());
+    const isToday = dateStr === todayStr;
+
+    // Get EOD prices for each position
+    // For stocks: Use ticker as key, fetch historical price
+    // For options: Use unique key, only fetch if today (can't get historical premiums)
+    const prices = {};
     const missingTickers = [];
 
+    // Build a map of trades by ticker for option lookup
+    const tradesByTicker = {};
+    for (const trade of openTrades) {
+      if (!tradesByTicker[trade.ticker]) {
+        tradesByTicker[trade.ticker] = [];
+      }
+      tradesByTicker[trade.ticker].push(trade);
+    }
+
+    // Fetch prices for each ticker
     for (const ticker of openTickers) {
-      const price = await historicalPricesBatcher.getPriceOnDate(ticker, dateStr);
-      if (price) {
-        stockPrices[ticker] = price;
+      const tradesForTicker = tradesByTicker[ticker] || [];
+
+      // Check if this ticker has any options
+      const hasOptions = tradesForTicker.some(t => t.assetType === 'options');
+
+      if (hasOptions) {
+        // Handle options
+        for (const trade of tradesForTicker) {
+          if (trade.assetType === 'options') {
+            // Create unique key for this option contract
+            const optionKey = `${trade.ticker}_${trade.strike}_${trade.expirationDate}_${trade.optionType}`;
+
+            if (isToday) {
+              // Fetch live option premium
+              const premium = priceTracker.getOptionPrice(
+                trade.ticker,
+                trade.expirationDate,
+                trade.optionType,
+                trade.strike
+              );
+
+              if (premium) {
+                prices[optionKey] = premium;
+              }
+              // Note: Don't mark as incomplete if option price missing - this is expected
+            }
+            // For past dates, don't fetch (can't get historical option premiums)
+            // Just skip - unrealized P&L will be 0 for days without stored premiums
+          } else {
+            // Regular stock position with same ticker as an option
+            const price = await historicalPricesBatcher.getPriceOnDate(ticker, dateStr);
+            if (price) {
+              prices[ticker] = price;
+            } else {
+              missingTickers.push(ticker);
+              console.warn(`[EquityCurve] Missing price for ${ticker} on ${dateStr}`);
+            }
+          }
+        }
       } else {
-        // FIX: Track missing tickers to mark snapshot as incomplete
-        missingTickers.push(ticker);
-        console.warn(`[EquityCurve] Missing price for ${ticker} on ${dateStr}`);
+        // All trades for this ticker are stocks - fetch historical price
+        const price = await historicalPricesBatcher.getPriceOnDate(ticker, dateStr);
+        if (price) {
+          prices[ticker] = price;
+        } else {
+          missingTickers.push(ticker);
+          console.warn(`[EquityCurve] Missing price for ${ticker} on ${dateStr}`);
+        }
       }
     }
 
@@ -502,7 +563,7 @@ class EquityCurveManager {
       startingBalance: state.settings.startingAccountSize,
       allTrades: state.journal.entries,
       cashFlowTransactions: state.cashFlow.transactions,
-      eodPrices: stockPrices
+      eodPrices: prices
     });
 
     // Get day's cash flow
@@ -511,7 +572,8 @@ class EquityCurveManager {
       dateStr
     );
 
-    // FIX: Mark as incomplete if any ticker prices are missing
+    // Mark as incomplete if any STOCK ticker prices are missing
+    // Options without prices are expected for historical dates
     const incomplete = missingTickers.length > 0;
 
     // Get existing retry count to increment if still incomplete
@@ -522,7 +584,7 @@ class EquityCurveManager {
       balance: balanceData.balance,
       realizedBalance: balanceData.realizedBalance,
       unrealizedPnL: balanceData.unrealizedPnL,
-      stockPrices,
+      stockPrices: prices,
       positionsOwned: openTickers,
       cashFlow: dayCashFlow,
       timestamp: Date.now(),
