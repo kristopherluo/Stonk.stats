@@ -580,12 +580,18 @@ class JournalView {
     // Render summary bar with filtered trades
     this.renderSummary(trades);
 
+    // Capture animation flag BEFORE any async work to prevent race conditions
+    const shouldAnimate = !this.hasAnimated;
+    if (shouldAnimate) {
+      this.hasAnimated = true;
+    }
+
     // Show empty state or table
     if (trades.length === 0) {
       this.showEmptyState();
     } else {
       this.hideEmptyState();
-      await this.renderTable(trades);
+      await this.renderTable(trades, shouldAnimate);
     }
   }
 
@@ -718,7 +724,7 @@ class JournalView {
     }
   }
 
-  async renderTable(trades) {
+  async renderTable(trades, shouldAnimate) {
     if (!this.elements.tableBody) return;
 
     // Update sort indicators in headers
@@ -729,9 +735,6 @@ class JournalView {
         th.classList.add(this.sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
       }
     });
-
-    const shouldAnimate = !this.hasAnimated;
-    this.hasAnimated = true;
 
     // Use shared journal table renderer (single source of truth!)
     const rowsHTML = await renderJournalTableRows(trades, {

@@ -569,25 +569,20 @@ class Settings {
   }
 
   updateSummary(cachedUnrealizedPnL = null) {
+    // Use shared account balance calculator for consistency with header display
+    const currentPrices = priceTracker.getPricesAsObject();
+    const result = accountBalanceCalculator.calculateCurrentBalance({
+      startingBalance: state.settings.startingAccountSize,
+      allTrades: state.journal.entries,
+      cashFlowTransactions: state.cashFlow.transactions,
+      currentPrices
+    });
+
     const starting = state.settings.startingAccountSize;
-    const realizedPnL = state.account.realizedPnL; // Use computed property
-    const cashFlow = state.getCashFlowNet();
-
-    // Calculate unrealized P&L
-    let unrealizedPnL = 0;
-    if (cachedUnrealizedPnL !== null) {
-      unrealizedPnL = cachedUnrealizedPnL;
-    } else {
-      const activeTrades = (state.journal?.entries || []).filter(e => e.status === 'open' || e.status === 'trimmed');
-      for (const trade of activeTrades) {
-        const pnl = priceTracker.calculateUnrealizedPnL(trade);
-        if (pnl) {
-          unrealizedPnL += pnl.unrealizedPnL;
-        }
-      }
-    }
-
-    const current = starting + realizedPnL + unrealizedPnL + cashFlow;
+    const realizedPnL = result.realizedPnL;
+    const unrealizedPnL = result.unrealizedPnL;
+    const cashFlow = result.netCashFlow;
+    const current = result.balance;
 
     if (this.elements.summaryStarting) {
       this.elements.summaryStarting.textContent = formatCurrency(starting);

@@ -133,9 +133,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  justify-content: center;
-  align-self: center;
-  margin-top: var(--space-3);
 }
 
 .stats-chart-column {
@@ -190,9 +187,14 @@
 }
 
 /* Responsive: Stack vertically on smaller screens */
-@media (max-width: 1200px) {
-  .stats-top-row,
+@media (max-width: 1600px) {
   .stats-details-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1700px) {
+  .stats-top-row {
     grid-template-columns: 1fr;
   }
 
@@ -535,7 +537,7 @@
     linear-gradient(145deg, #0a0a0a 0%, #000000 100%);
   border: 1px solid rgba(139, 92, 246, 0.3);
   border-radius: var(--border-radius-lg);
-  height: auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   box-shadow:
@@ -674,19 +676,76 @@
 
 /* === Responsive Adjustments === */
 
+@media (max-width: 1024px) {
+  .stats-view {
+    padding: var(--space-5);
+  }
+
+  .stats-overview-container,
+  .stats-details-container {
+    padding: var(--space-4);
+  }
+
+  .stats-grid {
+    gap: var(--space-3);
+  }
+}
+
 @media (max-width: 768px) {
   .stats-view {
     padding: var(--space-4);
+    max-height: calc(100vh - var(--header-height) - 40px);
   }
 
   .stats-header {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .stats-overview-container,
+  .stats-details-container {
+    padding: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .stats-section {
+    margin-bottom: var(--space-5);
+  }
+
+  .stats-section__title {
+    font-size: var(--text-lg);
   }
 
   .stats-chart__container {
     height: 200px;
+  }
+
+  .stat-card {
+    min-height: 90px;
+    padding: var(--space-4);
+  }
+
+  .stat-card__label {
+    font-size: 11px;
+  }
+
+  .stat-card__value {
+    font-size: var(--text-xl);
+  }
+
+  .stat-card__sub {
+    font-size: 10px;
+  }
+
+  /* Trades table horizontal scroll on mobile */
+  .selected-day-trades {
+    overflow-x: auto;
+  }
+
+  .selected-day-trades .journal-table {
+    min-width: 800px;
   }
 
   /* Simpler animations on mobile */
@@ -699,13 +758,53 @@
   }
 }
 
+@media (max-width: 640px) {
+  .stats-view {
+    padding: var(--space-3);
+  }
+
+  .stats-header__date-range {
+    font-size: 11px;
+  }
+
+  .selected-day-trades__date-range {
+    font-size: 11px;
+  }
+
+  .stats-overview-container,
+  .stats-details-container {
+    padding: var(--space-2);
+  }
+
+  .stats-grid {
+    gap: var(--space-2);
+  }
+
+  .stat-card {
+    min-height: 80px;
+    padding: var(--space-3);
+  }
+
+  .stat-card__value {
+    font-size: var(--text-lg);
+  }
+}
+
 @media (max-width: 500px) {
   .stat-card__value {
-    font-size: var(--text-xl);
+    font-size: var(--text-base);
   }
 
   .stat-card--lg .stat-card__value {
-    font-size: var(--text-2xl);
+    font-size: var(--text-xl);
+  }
+
+  .stats-section__title {
+    font-size: var(--text-base);
+  }
+
+  .stats-chart__title {
+    font-size: var(--text-base);
   }
 }
 

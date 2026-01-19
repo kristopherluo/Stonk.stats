@@ -288,6 +288,18 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Hide Industry column (11th) */
+.journal-view .journal-table th:nth-child(11),
+.journal-view .journal-table td:nth-child(11) {
+  display: none;
+}
+
+/* Trade Type column (12th) - reduced padding for wrapped text */
+.journal-view .journal-table td:nth-child(12) {
+  padding: var(--space-1) var(--space-4);
+  line-height: 1.2;
+}
+
 .journal-view .journal-table th {
   font-weight: var(--font-medium);
   color: var(--text-muted);

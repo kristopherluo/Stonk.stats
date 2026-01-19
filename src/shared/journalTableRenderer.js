@@ -114,6 +114,7 @@ export async function renderJournalTableRows(trades, options = {}) {
     // Get trade type for badge
     const setupType = trade.thesis?.setupType;
     const typeLabels = {
+      'ep': 'EP',
       'long-term': 'Long-term',
       'base': 'Base',
       'breakout': 'Breakout',

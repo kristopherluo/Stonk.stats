@@ -476,9 +476,21 @@
 
 /* === Responsive === */
 
+@media (max-width: 1024px) {
+  .pnl-calendar {
+    margin-top: var(--space-4);
+  }
+}
+
 @media (max-width: 768px) {
   .pnl-calendar {
-    padding: var(--space-4);
+    padding: var(--space-3);
+    margin-top: 0;
+  }
+
+  .pnl-calendar__header {
+    margin: 0 calc(-1 * var(--space-3)) var(--space-2);
+    padding: 0 var(--space-3) var(--space-2);
   }
 
   .pnl-calendar__grid {
@@ -501,6 +513,35 @@
   .pnl-calendar__month-text {
     font-size: var(--text-base);
   }
+
+  .pnl-calendar__today-btn {
+    font-size: 10px;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .pnl-calendar__picker {
+    min-width: 280px;
+  }
+}
+
+@media (max-width: 640px) {
+  .pnl-calendar {
+    padding: var(--space-2);
+  }
+
+  .pnl-calendar__header {
+    margin: 0 calc(-1 * var(--space-2)) var(--space-2);
+    padding: 0 var(--space-2) var(--space-2);
+  }
+
+  .pnl-calendar__cell {
+    min-height: 55px;
+  }
+
+  .pnl-calendar__weekday {
+    font-size: 10px;
+    padding: var(--space-1);
+  }
 }
 
 @media (max-width: 480px) {
@@ -509,15 +550,42 @@
   }
 
   .pnl-calendar__weekday {
-    font-size: 10px;
-    padding: var(--space-1);
+    font-size: 9px;
+    padding: 4px;
   }
 
   .pnl-calendar__day-number {
     font-size: 11px;
+    margin-bottom: 2px;
   }
 
   .pnl-calendar__day-pnl {
     font-size: 9px;
+  }
+
+  .pnl-calendar__month-text {
+    font-size: var(--text-sm);
+  }
+
+  .pnl-calendar__today-btn {
+    font-size: 9px;
+    padding: 4px var(--space-1);
+  }
+
+  .pnl-calendar__nav-btn,
+  .pnl-calendar__month-picker-btn {
+    padding: 4px var(--space-1);
+  }
+
+  .pnl-calendar__picker {
+    min-width: 260px;
+  }
+
+  .pnl-calendar__picker-months {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .pnl-calendar__picker-years {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
