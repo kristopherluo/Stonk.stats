@@ -88,7 +88,7 @@ class App {
     viewManager.init();
 
     // Initialize stats and chart
-    stats.init();
+    await stats.init();
     equityChart.init();
 
     // Initialize positions and journal views

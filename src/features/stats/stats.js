@@ -6,7 +6,7 @@
 import { state } from '../../core/state.js';
 import { showToast } from '../../components/ui/ui.js';
 import { initFlatpickr, getCurrentWeekday } from '../../core/utils.js';
-import { StatsCalculator } from './StatsCalculator.js';
+import { incrementalStatsCalculator } from './IncrementalStatsCalculator.js';
 import { equityCurveManager } from './EquityCurveManager.js';
 import { DateRangeFilter } from '../../shared/DateRangeFilter.js';
 import { FilterPopup } from '../../shared/FilterPopup.js';
@@ -38,7 +38,7 @@ class Stats {
     this.elements = {};
     this.stats = {};
     this.filters = new DateRangeFilter();
-    this.calculator = new StatsCalculator();
+    this.calculator = incrementalStatsCalculator; // Use incremental calculator
     this.chart = null;
     this.calendar = null; // P&L calendar component
     this.isCalculating = false;
@@ -50,7 +50,10 @@ class Stats {
     this.dateToPicker = null;
   }
 
-  init() {
+  async init() {
+    // Initialize incremental calculator
+    await this.calculator.init();
+
     // Cache DOM elements
     this.elements = {
       // Trading Performance
@@ -108,6 +111,7 @@ class Stats {
     state.on('journalEntryAdded', (entry) => {
       try {
         equityCurveManager.invalidateForTrade(entry);
+        this.calculator.invalidateCache(); // Invalidate stats cache
         // Only refresh if currently on stats page
         if (state.ui.currentView === 'stats') {
           sharedMetrics.recalculateAll();
@@ -120,6 +124,7 @@ class Stats {
     state.on('journalEntryUpdated', (entry) => {
       try {
         equityCurveManager.invalidateForTrade(entry);
+        this.calculator.invalidateCache(); // Invalidate stats cache
         // Only refresh if currently on stats page
         if (state.ui.currentView === 'stats') {
           sharedMetrics.recalculateAll();
@@ -132,6 +137,7 @@ class Stats {
     state.on('journalEntryDeleted', (entry) => {
       try {
         equityCurveManager.invalidateForTrade(entry);
+        this.calculator.invalidateCache(); // Invalidate stats cache
         // Only refresh if currently on stats page
         if (state.ui.currentView === 'stats') {
           sharedMetrics.recalculateAll();
