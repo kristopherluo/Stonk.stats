@@ -18,6 +18,7 @@ import { priceTracker } from '../../core/priceTracker.js';
 import { getTradesOpenOnDate, getTradeEntryDateString } from '../../utils/tradeUtils.js';
 import { generateOptionKeyFromTrade } from '../../utils/optionKeyUtils.js';
 import { createLogger } from '../../utils/logger.js';
+import { getOpenTrades, isOpenTrade } from '../../shared/TradeFilters.js';
 
 const logger = createLogger('EquityCurveManager');
 
@@ -55,7 +56,7 @@ class EquityCurveManager {
 
       // Check for stale cache BEFORE finding missing days
       // If we have open trades but cached data shows 0 unrealized P&L AND no positions owned, cache is stale
-      if (state.journal.entries.some(t => t.status === 'open' || t.status === 'trimmed')) {
+      if (state.journal.entries.some(isOpenTrade)) {
         const sampleDate = startDate;
         const cachedData = eodCacheManager.getEODData(sampleDate);
 
@@ -297,7 +298,7 @@ class EquityCurveManager {
     // Today (or date) without EOD data: use current/live prices
     if (dateStr === todayStr) {
       // Skip if we have active trades but no price data (prevents $0 unrealized P&L)
-      const activeTrades = state.journal.entries.filter(t => t.status === 'open' || t.status === 'trimmed');
+      const activeTrades = getOpenTrades(state.journal.entries);
       if (activeTrades.length > 0 && priceTracker.cache.size === 0) {
         return null;
       }

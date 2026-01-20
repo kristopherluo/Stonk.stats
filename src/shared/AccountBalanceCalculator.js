@@ -19,8 +19,9 @@ import { formatDate } from '../utils/marketHours.js';
 import { getCashFlowOnDate, getTransactionDateString, getNetCashFlow, getCashFlowUpToDate } from '../utils/cashFlowUtils.js';
 import { getTradesOpenOnDate, getTradeEntryDateString } from '../utils/tradeUtils.js';
 import { priceTracker } from '../core/priceTracker.js';
-import { OPTIONS_CONTRACT_MULTIPLIER } from '../constants/index.js';
 import { generateOptionKeyFromTrade } from '../utils/optionKeyUtils.js';
+import { getOpenTrades } from './TradeFilters.js';
+import { getAssetMultiplier } from '../utils/assetTypeUtils.js';
 
 class AccountBalanceCalculator {
   /**
@@ -148,7 +149,7 @@ class AccountBalanceCalculator {
     }
 
     // For options, multiply by 100 (contract multiplier)
-    const multiplier = trade.assetType === 'options' ? OPTIONS_CONTRACT_MULTIPLIER : 1;
+    const multiplier = getAssetMultiplier(trade.assetType);
     const unrealizedPnL = (currentPrice - trade.entry) * shares * multiplier;
     const unrealizedPercent = ((currentPrice - trade.entry) / trade.entry) * 100;
 
@@ -179,8 +180,7 @@ class AccountBalanceCalculator {
    * @private
    */
   _calculateUnrealizedPnL(allTrades, currentPrices) {
-    return allTrades
-      .filter(t => t.status === 'open' || t.status === 'trimmed')
+    return getOpenTrades(allTrades)
       .reduce((sum, trade) => {
         let price = null;
 
@@ -341,8 +341,7 @@ class AccountBalanceCalculator {
     const result = this.calculateCurrentBalance(options);
 
     // Get open positions breakdown
-    const openPositions = options.allTrades
-      .filter(t => t.status === 'open' || t.status === 'trimmed')
+    const openPositions = getOpenTrades(options.allTrades)
       .map(trade => {
         const priceData = options.currentPrices[trade.ticker];
         const price = priceData?.price || priceData;

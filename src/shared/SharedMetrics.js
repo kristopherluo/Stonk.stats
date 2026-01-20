@@ -4,6 +4,7 @@
  */
 
 import { state } from '../core/state.js';
+import { getOpenTrades } from './TradeFilters.js';
 
 class SharedMetrics {
   constructor() {
@@ -23,7 +24,7 @@ class SharedMetrics {
    */
   calculateOpenRisk() {
     const allEntries = state.journal.entries;
-    const allOpenTrades = allEntries.filter(e => e.status === 'open' || e.status === 'trimmed');
+    const allOpenTrades = getOpenTrades(allEntries);
 
     const totalOpenRisk = allOpenTrades.reduce((sum, t) => {
       const shares = t.remainingShares ?? t.shares;

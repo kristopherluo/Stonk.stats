@@ -6,6 +6,7 @@ import { state } from '../../core/state.js';
 import { formatCurrency, formatNumber, initFlatpickr, getCurrentWeekday } from '../../core/utils.js';
 import { formatDate } from '../../utils/marketHours.js';
 import { showToast } from '../ui/ui.js';
+import { getAssetMultiplier } from '../../utils/assetTypeUtils.js';
 
 class TrimModal {
   constructor() {
@@ -538,7 +539,7 @@ class TrimModal {
     const sharesRemaining = remainingShares - sharesToClose;
 
     // For options, multiply by 100 (contract multiplier)
-    const multiplier = this.currentTrade.assetType === 'options' ? 100 : 1;
+    const multiplier = getAssetMultiplier(this.currentTrade.assetType);
     const profitPerShare = (exitPrice - this.currentTrade.entry) * multiplier;
     const totalPnL = profitPerShare * sharesToClose;
     const isProfit = totalPnL >= 0;
@@ -904,7 +905,7 @@ class TrimModal {
       if (this.currentTrade.trimHistory && this.currentTrade.trimHistory.length > 0) {
         const updatedTrimHistory = this.currentTrade.trimHistory.map(trim => {
           // Recalculate P&L based on new entry (with options multiplier)
-          const multiplier = this.currentTrade.assetType === 'options' ? 100 : 1;
+          const multiplier = getAssetMultiplier(this.currentTrade.assetType);
           const newPnl = (trim.exitPrice - newEntry) * trim.shares * multiplier;
           // Recalculate R-multiple based on new original stop
           const newRiskPerShare = newEntry - newOriginalStop;
@@ -977,7 +978,7 @@ class TrimModal {
     const rMultiple = riskPerShare !== 0 ? (exitPrice - this.currentTrade.entry) / riskPerShare : 0;
 
     // For options, multiply by 100 (contract multiplier)
-    const multiplier = this.currentTrade.assetType === 'options' ? 100 : 1;
+    const multiplier = getAssetMultiplier(this.currentTrade.assetType);
     const pnl = (exitPrice - this.currentTrade.entry) * sharesToClose * multiplier;
 
     const closeDate = this.elements.dateInput?.value

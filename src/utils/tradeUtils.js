@@ -5,7 +5,7 @@
  * scattered across EquityCurveManager, AccountBalanceCalculator, and stats.js
  */
 
-import { formatDate } from './marketHours.js';
+import { getDateStringFromTimestamp } from './timestampUtils.js';
 
 /**
  * Get entry date string from a trade's timestamp
@@ -14,16 +14,7 @@ import { formatDate } from './marketHours.js';
  * @returns {string|null} Date string in 'YYYY-MM-DD' format, or null if no timestamp
  */
 export function getTradeEntryDateString(trade) {
-  if (!trade.timestamp) return null;
-
-  // If timestamp is already a string in YYYY-MM-DD format, return it
-  if (typeof trade.timestamp === 'string' && trade.timestamp.match(/^\d{4}-\d{2}-\d{2}/)) {
-    return trade.timestamp.substring(0, 10);
-  }
-
-  // Otherwise convert to Date and format
-  const date = new Date(trade.timestamp);
-  return formatDate(date);
+  return getDateStringFromTimestamp(trade, 'timestamp');
 }
 
 /**

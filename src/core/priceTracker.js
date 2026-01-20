@@ -11,6 +11,8 @@ import { compressText, decompressText } from '../utils/compression.js';
 import { validateAndMigrate, addSchemaVersion } from '../utils/migrations.js';
 import { STORAGE_LIMITS, CACHE_KEYS, OPTIONS_CONTRACT_MULTIPLIER, TIME_CONSTANTS } from '../constants/index.js';
 import { createLogger } from '../utils/logger.js';
+import { getOpenTrades } from '../shared/TradeFilters.js';
+import accountBalanceCalculator from '../shared/AccountBalanceCalculator.js';
 
 const logger = createLogger('PriceTracker');
 const CACHE_KEY = CACHE_KEYS.PRICE_CACHE;
@@ -432,7 +434,7 @@ export const priceTracker = {
 
   async refreshAllActivePrices() {
     const trades = state.journal.entries;
-    const activeTrades = trades.filter(t => t.status === 'open' || t.status === 'trimmed');
+    const activeTrades = getOpenTrades(trades);
     const tickers = [...new Set(activeTrades.map(t => t.ticker).filter(Boolean))];
 
     if (tickers.length === 0) {
@@ -480,18 +482,11 @@ export const priceTracker = {
     if (!priceData) return null;
 
     const currentPrice = priceData.price;
-    const shares = trade.remainingShares || trade.shares;
-    const entry = trade.entry;
+    const result = accountBalanceCalculator.calculateTradeUnrealizedPnL(trade, currentPrice);
 
-    const unrealizedPnL = (currentPrice - entry) * shares;
-    const unrealizedPercent = ((currentPrice - entry) / entry) * 100;
-
+    // Include priceData for backwards compatibility
     return {
-      currentPrice,
-      unrealizedPnL,
-      unrealizedPercent,
-      shares,
-      entry,
+      ...result,
       priceData
     };
   },
@@ -732,16 +727,7 @@ export const priceTracker = {
       return null;
     }
 
-    const shares = trade.remainingShares ?? trade.shares;
-    const multiplier = OPTIONS_CONTRACT_MULTIPLIER;
-
-    const unrealizedPnL = (currentPrice - trade.entry) * shares * multiplier;
-    const unrealizedPercent = trade.entry !== 0 ? ((currentPrice - trade.entry) / trade.entry) * 100 : 0;
-
-    return {
-      currentPrice,
-      unrealizedPnL,
-      unrealizedPercent
-    };
+    // Delegate to AccountBalanceCalculator for consistent calculation logic
+    return accountBalanceCalculator.calculateTradeUnrealizedPnL(trade, currentPrice);
   }
 };

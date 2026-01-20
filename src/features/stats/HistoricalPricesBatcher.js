@@ -9,6 +9,7 @@ import { storage } from '../../utils/storage.js';
 import { state } from '../../core/state.js';
 import { validateAndMigrate, addSchemaVersion } from '../../utils/migrations.js';
 import { createLogger } from '../../utils/logger.js';
+import { getOpenTrades } from '../../shared/TradeFilters.js';
 
 const logger = createLogger('HistoricalPricesBatcher');
 
@@ -568,8 +569,7 @@ class HistoricalPricesBatcher {
   cleanupPricesOlderThan(cutoffDate, allTrades = []) {
     // Get tickers with open/trimmed positions - keep ALL their prices
     const activeTickers = new Set(
-      allTrades
-        .filter(t => t.status === 'open' || t.status === 'trimmed')
+      getOpenTrades(allTrades)
         .map(t => t.ticker)
     );
 

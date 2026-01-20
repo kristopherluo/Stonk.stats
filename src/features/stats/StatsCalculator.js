@@ -11,6 +11,7 @@ import { formatDate } from '../../utils/marketHours.js';
 import eodCacheManager from '../../core/eodCacheManager.js';
 import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 import { calculateRealizedPnL, getTradeRealizedPnL } from '../../core/utils/tradeCalculations.js';
+import { isOpenTrade } from '../../shared/TradeFilters.js';
 
 export class StatsCalculator {
   /**
@@ -261,7 +262,7 @@ export class StatsCalculator {
         if (closeDate < targetDate) return false;
       }
 
-      return e.status === 'open' || e.status === 'trimmed';
+      return isOpenTrade(e);
     });
 
     // Calculate unrealized P&L for open trades (simplified fallback)

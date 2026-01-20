@@ -5,7 +5,7 @@
  * scattered across AccountBalanceCalculator and StatsCalculator
  */
 
-import { formatDate } from './marketHours.js';
+import { getDateStringFromTimestamp } from './timestampUtils.js';
 
 /**
  * Extract date string from transaction timestamp
@@ -14,16 +14,7 @@ import { formatDate } from './marketHours.js';
  * @returns {string|null} Date string in 'YYYY-MM-DD' format, or null if no timestamp
  */
 export function getTransactionDateString(transaction) {
-  if (!transaction.timestamp) return null;
-
-  // If timestamp is already a string in YYYY-MM-DD format, return it
-  if (typeof transaction.timestamp === 'string' && transaction.timestamp.match(/^\d{4}-\d{2}-\d{2}/)) {
-    return transaction.timestamp.substring(0, 10);
-  }
-
-  // Otherwise convert to Date and format
-  const date = new Date(transaction.timestamp);
-  return formatDate(date);
+  return getDateStringFromTimestamp(transaction, 'timestamp');
 }
 
 /**

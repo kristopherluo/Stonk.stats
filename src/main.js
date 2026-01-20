@@ -20,6 +20,7 @@ import { journalView } from './features/journal/journalView.js';
 import { historicalPricesBatcher } from './features/stats/HistoricalPricesBatcher.js';
 import { formatDate } from './utils/marketHours.js';
 import { createLogger } from './utils/logger.js';
+import { getOpenTrades } from './shared/TradeFilters.js';
 
 const logger = createLogger('App');
 
@@ -42,7 +43,7 @@ class App {
     await priceTracker.init();
 
     // Auto-fetch prices on load if we have open trades and cache is empty/stale
-    const openTrades = state.journal.entries.filter(t => t.status === 'open' || t.status === 'trimmed');
+    const openTrades = getOpenTrades(state.journal.entries);
     const hasOpenTrades = openTrades.length > 0;
     const hasCachedPrices = priceTracker.cache.size > 0;
 

@@ -8,7 +8,8 @@ import { formatCurrency, formatDate } from '../core/utils.js';
 import { getTradeRealizedPnL } from '../core/utils/tradeCalculations.js';
 import { state } from '../core/state.js';
 import { priceTracker } from '../core/priceTracker.js';
-import { OPTIONS_CONTRACT_MULTIPLIER } from '../constants/index.js';
+import { isOpenTrade } from './TradeFilters.js';
+import { getAssetMultiplier } from '../utils/assetTypeUtils.js';
 
 /**
  * Render journal table rows for given trades
@@ -55,7 +56,7 @@ export async function renderJournalTableRows(trades, options = {}) {
     if (hasPnL && trade.riskDollars > 0) {
       // For options, riskDollars doesn't include the 100 multiplier
       // so we need to multiply it to get the actual dollar risk
-      const multiplier = trade.assetType === 'options' ? OPTIONS_CONTRACT_MULTIPLIER : 1;
+      const multiplier = getAssetMultiplier(trade.assetType);
       const actualRiskDollars = trade.riskDollars * multiplier;
       rMultiple = pnl / actualRiskDollars;
     }
@@ -64,7 +65,7 @@ export async function renderJournalTableRows(trades, options = {}) {
     let pnlPercent = null;
     if (hasPnL) {
       const totalShares = trade.originalShares || trade.shares;
-      const multiplier = trade.assetType === 'options' ? OPTIONS_CONTRACT_MULTIPLIER : 1;
+      const multiplier = getAssetMultiplier(trade.assetType);
       const positionCost = trade.entry * totalShares * multiplier;
       if (positionCost > 0) {
         pnlPercent = (pnl / positionCost) * 100;
@@ -73,7 +74,7 @@ export async function renderJournalTableRows(trades, options = {}) {
 
     // Calculate position size as % of account
     let positionPercent = null;
-    if (trade.status === 'open' || trade.status === 'trimmed') {
+    if (isOpenTrade(trade)) {
       const accountSize = state.account.currentSize;
       const positionValue = shares * trade.entry;
       if (accountSize > 0) {

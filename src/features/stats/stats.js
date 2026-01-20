@@ -23,6 +23,7 @@ import { journalView } from '../journal/journalView.js';
 import { renderJournalTableRows } from '../../shared/journalTableRenderer.js';
 import { convertHyphenKeyToUnderscoreKey, generateOptionKeyFromTrade } from '../../utils/optionKeyUtils.js';
 import { createLogger } from '../../utils/logger.js';
+import { getOpenTrades, isOpenTrade } from '../../shared/TradeFilters.js';
 
 const logger = createLogger('Stats');
 
@@ -393,7 +394,7 @@ class Stats {
 
     try {
       // FIX: Auto-fetch prices if cache is empty (prevents silent $0 unrealized P&L)
-      const activeTrades = state.journal.entries.filter(t => t.status === 'open' || t.status === 'trimmed');
+      const activeTrades = getOpenTrades(state.journal.entries);
       if (activeTrades.length > 0 && priceTracker.cache.size === 0) {
         logger.debug('[Stats] Price cache empty, fetching current prices...');
         try {
@@ -839,9 +840,7 @@ class Stats {
   async refreshPrices(silent = false) {
     try {
       // Get all open/trimmed positions
-      const activeTrades = state.journal.entries.filter(
-        t => t.status === 'open' || t.status === 'trimmed'
-      );
+      const activeTrades = getOpenTrades(state.journal.entries);
 
       if (activeTrades.length === 0) {
         logger.debug('[Stats] No active trades to refresh prices for');
@@ -939,11 +938,10 @@ class Stats {
 
       // Get trades that were open on this date
       const openTrades = state.journal.entries.filter(trade => {
-        const isOpenOrTrimmed = trade.status === 'open' || trade.status === 'trimmed';
         const entryDateStr = this._getEntryDateString(trade);
         const enteredBefore = entryDateStr <= dateStr;
         const notClosedYet = !trade.exitDate || trade.exitDate > dateStr;
-        return isOpenOrTrimmed && enteredBefore && notClosedYet;
+        return isOpenTrade(trade) && enteredBefore && notClosedYet;
       });
 
       // Build EOD prices map and track which tickers we have prices for

@@ -12,6 +12,7 @@ import { wizard } from '../../components/modals/wizard.js';
 import { confetti } from '../../components/ui/confetti.js';
 import { viewManager } from '../../components/ui/viewManager.js';
 import { priceTracker } from '../../core/priceTracker.js';
+import { getOpenTrades } from '../../shared/TradeFilters.js';
 
 class Journal {
   constructor() {
@@ -333,7 +334,7 @@ class Journal {
 
   renderActiveTrades() {
     // Include both open and trimmed trades (they still have positions)
-    const activeTrades = state.journal.entries.filter(e => e.status === 'open' || e.status === 'trimmed');
+    const activeTrades = getOpenTrades(state.journal.entries);
 
     if (this.elements.activeTradeCount) {
       this.elements.activeTradeCount.textContent = `${activeTrades.length} active`;
@@ -434,7 +435,7 @@ class Journal {
     if (!this.elements.riskSummary) return;
 
     // Include both open and trimmed trades (they still have positions at risk)
-    const activeTrades = state.journal.entries.filter(e => e.status === 'open' || e.status === 'trimmed');
+    const activeTrades = getOpenTrades(state.journal.entries);
 
     // Show CASH status when no active trades
     if (activeTrades.length === 0) {

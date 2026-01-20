@@ -13,6 +13,7 @@ import { sharedMetrics } from '../../shared/SharedMetrics.js';
 import { FilterPopup } from '../../shared/FilterPopup.js';
 import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 import { createLogger } from '../../utils/logger.js';
+import { getOpenTrades, isOpenTrade } from '../../shared/TradeFilters.js';
 const logger = createLogger('PositionsView');
 
 class PositionsView {
@@ -295,9 +296,7 @@ class PositionsView {
   }
 
   getFilteredPositions() {
-    let positions = state.journal.entries.filter(
-      e => e.status === 'open' || e.status === 'trimmed'
-    );
+    let positions = getOpenTrades(state.journal.entries);
 
     // Filter by status
     if (this.filters.status === 'open') {
@@ -392,9 +391,7 @@ class PositionsView {
   renderRiskBar(activeTrades) {
     // Use filtered positions if provided, otherwise fall back to all active trades
     if (!activeTrades) {
-      activeTrades = state.journal.entries.filter(
-        e => e.status === 'open' || e.status === 'trimmed'
-      );
+      activeTrades = getOpenTrades(state.journal.entries);
     }
 
     if (activeTrades.length === 0) {
@@ -729,9 +726,7 @@ class PositionsView {
     }
 
     // Check if there are any active positions at all
-    const allActivePositions = state.journal.entries.filter(
-      e => e.status === 'open' || e.status === 'trimmed'
-    );
+    const allActivePositions = getOpenTrades(state.journal.entries);
     const hasActivePositions = allActivePositions.length > 0;
 
     // Update empty state message based on context
@@ -808,9 +803,8 @@ class PositionsView {
       // Fetch options prices if API key is configured
       let optionsResults = { success: [], failed: [] };
       if (priceTracker.optionsApiKey) {
-        const activeTrades = state.journal.entries.filter(
-          e => (e.status === 'open' || e.status === 'trimmed') && e.assetType === 'options'
-        );
+        const activeTrades = getOpenTrades(state.journal.entries)
+          .filter(e => e.assetType === 'options');
         if (activeTrades.length > 0) {
           optionsResults = await priceTracker.refreshOptionsPrices(activeTrades);
         }
