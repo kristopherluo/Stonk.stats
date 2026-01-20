@@ -135,6 +135,10 @@
   gap: var(--space-6);
 }
 
+.stats-cards-column .stats-section:last-child {
+  margin-bottom: var(--space-4);
+}
+
 .stats-chart-column {
   min-height: 90px;
   display: flex;

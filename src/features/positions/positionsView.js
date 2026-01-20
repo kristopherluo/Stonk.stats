@@ -54,7 +54,12 @@ class PositionsView {
       });
     }
 
-    this.render();
+    // Only render if view is already active (page refresh case)
+    // Otherwise, viewChanged event will trigger the initial render
+    const positionsView = document.getElementById('positionsView');
+    if (positionsView && positionsView.classList.contains('view--active')) {
+      this.render();
+    }
 
     // Listen for journal changes
     state.on('journalEntryAdded', () => this.render());
@@ -63,12 +68,20 @@ class PositionsView {
 
     // Listen for view changes
     state.on('viewChanged', (data) => {
+      // Clear grid when leaving positions to prevent stale cards from showing
+      if (data.from === 'positions') {
+        if (this.elements.grid) {
+          this.elements.grid.innerHTML = '';
+        }
+        this.stopAutoRefresh();
+      }
+
       if (data.to === 'positions') {
         this.hasAnimated = false; // Reset animation flag when entering view
-        this.render();
+        setTimeout(() => {
+          this.render();
+        }, 100); // Wait for viewManager animation to complete
         this.startAutoRefresh(true); // Pass true to skip immediate refresh
-      } else {
-        this.stopAutoRefresh();
       }
     });
 

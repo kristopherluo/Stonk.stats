@@ -80,7 +80,12 @@ class JournalView {
     // Update filter count badge (should be 0 since all filters are at default state)
     this.updateFilterCount();
 
-    this.render();
+    // Only render if view is already active (page refresh case)
+    // Otherwise, viewChanged event will trigger the initial render
+    const journalView = document.getElementById('journalView');
+    if (journalView && journalView.classList.contains('view--active')) {
+      this.render();
+    }
 
     // Listen for journal changes
     state.on('journalEntryAdded', () => this.render());
@@ -89,14 +94,19 @@ class JournalView {
 
     // Listen for view changes
     state.on('viewChanged', (data) => {
-      // Clear expanded rows when navigating away from journal
+      // Clear table and expanded rows when navigating away from journal
       if (data.from === 'journal') {
         this.expandedRows.clear();
+        if (this.elements.tableBody) {
+          this.elements.tableBody.innerHTML = '';
+        }
       }
 
       if (data.to === 'journal') {
         this.hasAnimated = false; // Reset animation flag when entering view
-        this.render();
+        setTimeout(() => {
+          this.render();
+        }, 100); // Wait for viewManager animation to complete (200ms + buffer)
       }
     });
   }

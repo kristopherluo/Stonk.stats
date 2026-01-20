@@ -879,7 +879,7 @@ class Stats {
       // 3. The market was actually open today (not a holiday/weekend)
       //    - We check this by seeing if tradingDay matches current weekday
       //    - On holidays/weekends, getTradingDay() returns a past date
-      const currentWeekday = marketHours.formatDate(marketHours.getCurrentWeekday());
+      const currentWeekday = marketHours.formatDate(getCurrentWeekday());
       const isActualTradingDay = tradingDay === currentWeekday;
 
       if (isAfterClose && !eodCacheManager.hasEODData(tradingDay) && isActualTradingDay) {
@@ -895,6 +895,15 @@ class Stats {
 
   /**
    * Save EOD snapshot for a specific trading day
+   *
+   * Options are stored using unique keys: ticker_strike_expiration_type
+   * This ensures multiple option contracts on the same underlying ticker
+   * don't overwrite each other.
+   *
+   * Format conversion: priceTracker uses hyphen format internally,
+   * but EOD snapshots use underscore format for consistency with
+   * AccountBalanceCalculator and EquityCurveManager.
+   *
    * @param {string} dateStr - Date in 'YYYY-MM-DD' format
    */
   async saveEODSnapshot(dateStr) {
@@ -905,6 +914,18 @@ class Stats {
       for (const [ticker, data] of Object.entries(priceCache)) {
         if (data && data.price) {
           prices[ticker] = data;
+        }
+      }
+
+      // Get options prices from optionsCache (Map with hyphen keys)
+      const optionsCache = priceTracker.optionsCache || new Map();
+      for (const [hyphenKey, data] of optionsCache.entries()) {
+        if (data && data.price) {
+          // Convert from hyphen format (ticker-expiration-type-strike)
+          // to underscore format (ticker_strike_expiration_type)
+          const [ticker, expirationDate, optionType, strike] = hyphenKey.split('-');
+          const underscoreKey = `${ticker}_${strike}_${expirationDate}_${optionType}`;
+          prices[underscoreKey] = { price: data.price, timestamp: data.timestamp };
         }
       }
 
@@ -923,12 +944,24 @@ class Stats {
       const incompleteTickers = [];
 
       for (const trade of openTrades) {
-        const priceData = prices[trade.ticker];
-        if (priceData && priceData.price) {
-          stockPrices[trade.ticker] = priceData.price;
-          positionsOwned.push(trade.ticker);
+        let key, priceData;
+
+        if (trade.assetType === 'options') {
+          // Use unique key for options
+          key = `${trade.ticker}_${trade.strike}_${trade.expirationDate}_${trade.optionType}`;
+          priceData = prices[key];
         } else {
-          incompleteTickers.push(trade.ticker);
+          // Use ticker for stocks
+          key = trade.ticker;
+          priceData = prices[trade.ticker];
+        }
+
+        if (priceData) {
+          const price = typeof priceData === 'number' ? priceData : priceData.price;
+          stockPrices[key] = price;
+          positionsOwned.push(key);
+        } else {
+          incompleteTickers.push(key);
         }
       }
 
