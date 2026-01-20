@@ -397,26 +397,153 @@ class AppState {
   // Private method: immediate save (called by debounced function)
   async _saveJournalImmediate() {
     try {
-      // Compress notes before saving
-      const compressedEntries = this.state.journal.entries.map(trade => compressTradeNotes(trade));
-      await storage.setItem('riskCalcJournal', compressedEntries);
+      // Save trades individually
+      const tradeIds = [];
+
+      for (const trade of this.state.journal.entries) {
+        if (trade && trade.id) {
+          // Compress notes before saving
+          const compressedTrade = compressTradeNotes(trade);
+          await storage.setItem(`trade_${trade.id}`, compressedTrade);
+          tradeIds.push(trade.id);
+        }
+      }
+
+      // Update the index
+      await storage.setItem('riskCalcJournalIndex', tradeIds);
+
+      logger.debug(`Saved ${tradeIds.length} trades to individual storage`);
     } catch (e) {
       logger.error('Failed to save journal:', e);
     }
   }
 
+  /**
+   * Save a single trade (optimized for single trade updates)
+   * @param {Object} trade - Trade object to save
+   */
+  async saveTrade(trade) {
+    try {
+      if (!trade || !trade.id) {
+        logger.error('Cannot save trade: missing trade or ID');
+        return;
+      }
+
+      // Compress and save the trade
+      const compressedTrade = compressTradeNotes(trade);
+      await storage.setItem(`trade_${trade.id}`, compressedTrade);
+
+      // Update index if this is a new trade
+      const index = await storage.getItem('riskCalcJournalIndex') || [];
+      if (!index.includes(trade.id)) {
+        index.push(trade.id);
+        await storage.setItem('riskCalcJournalIndex', index);
+      }
+
+      logger.debug(`Saved individual trade: ${trade.id}`);
+    } catch (e) {
+      logger.error('Failed to save individual trade:', e);
+    }
+  }
+
+  /**
+   * Delete a single trade from storage
+   * @param {string} tradeId - ID of trade to delete
+   */
+  async deleteTrade(tradeId) {
+    try {
+      // Remove from storage
+      await storage.removeItem(`trade_${tradeId}`);
+
+      // Update index
+      const index = await storage.getItem('riskCalcJournalIndex') || [];
+      const newIndex = index.filter(id => id !== tradeId);
+      await storage.setItem('riskCalcJournalIndex', newIndex);
+
+      logger.debug(`Deleted trade: ${tradeId}`);
+    } catch (e) {
+      logger.error('Failed to delete trade:', e);
+    }
+  }
+
   async loadJournal() {
     try {
-      const entries = await storage.getItem('riskCalcJournal');
-      if (entries) {
-        // Decompress notes after loading
-        this.state.journal.entries = entries.map(trade => decompressTradeNotes(trade));
-        // Migrate trades to add options fields if missing
-        this._migrateTradesForOptions();
-        // realizedPnL and currentSize are now computed properties - no manual calculation needed
+      // Check if we need to migrate from array storage to individual trade storage
+      await this._migrateJournalToIndividualStorageIfNeeded();
+
+      // Load from new individual trade storage format
+      const tradeIndex = await storage.getItem('riskCalcJournalIndex');
+
+      if (tradeIndex && Array.isArray(tradeIndex)) {
+        // Load each trade individually
+        const trades = await Promise.all(
+          tradeIndex.map(id => storage.getItem(`trade_${id}`))
+        );
+
+        // Filter out any null trades (shouldn't happen, but be safe)
+        this.state.journal.entries = trades
+          .filter(trade => trade !== null)
+          .map(trade => decompressTradeNotes(trade));
+
+        logger.debug(`Loaded ${this.state.journal.entries.length} trades from individual storage`);
+      } else {
+        // No trades yet
+        this.state.journal.entries = [];
       }
+
+      // Migrate trades to add options fields if missing
+      this._migrateTradesForOptions();
     } catch (e) {
       logger.error('Failed to load journal:', e);
+    }
+  }
+
+  /**
+   * Migrate journal from array storage (v2) to individual trade storage (v3)
+   * This is a one-time migration that runs automatically on first load
+   */
+  async _migrateJournalToIndividualStorageIfNeeded() {
+    try {
+      // Check if old array format exists
+      const oldJournal = await storage.getItem('riskCalcJournal');
+
+      // If no old journal, we're either already migrated or have no data
+      if (!oldJournal || !Array.isArray(oldJournal)) {
+        return;
+      }
+
+      // Check if we've already migrated (index exists)
+      const existingIndex = await storage.getItem('riskCalcJournalIndex');
+      if (existingIndex) {
+        logger.debug('Journal already migrated to individual storage');
+        return;
+      }
+
+      logger.info(`Migrating ${oldJournal.length} trades to individual storage...`);
+
+      // Save each trade individually
+      const tradeIds = [];
+      for (const trade of oldJournal) {
+        if (trade && trade.id) {
+          await storage.setItem(`trade_${trade.id}`, trade);
+          tradeIds.push(trade.id);
+        }
+      }
+
+      // Save the index
+      await storage.setItem('riskCalcJournalIndex', tradeIds);
+
+      // Backup old journal (don't delete immediately)
+      await storage.setItem('riskCalcJournal_backup_v2', oldJournal);
+
+      // Remove old journal array
+      await storage.removeItem('riskCalcJournal');
+
+      logger.info(`Migration complete: ${tradeIds.length} trades migrated. Old data backed up to 'riskCalcJournal_backup_v2'`);
+
+    } catch (e) {
+      logger.error('Failed to migrate journal to individual storage:', e);
+      throw e; // Re-throw to prevent data loss
     }
   }
 

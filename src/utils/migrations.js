@@ -17,7 +17,7 @@ export const SCHEMA_VERSIONS = {
   eodCache: 1,              // v1: current structure with incomplete/missingTickers
   companySummaryCache: 1,   // v1: compressed summaries with LRU
   companyDataCache: 1,      // v1: Finnhub company profiles
-  journal: 2,               // v2: added compression to notes
+  journal: 3,               // v3: individual trade storage (v2: added compression to notes)
   cashFlow: 1,              // v1: transactions array
   settings: 2               // v2: added twelveDataBatchSize
 };
@@ -64,9 +64,9 @@ const migrations = {
     };
   }
 
-  // Add more migrations here as schema evolves
-  // Example:
-  // 'journal:2:3': (oldData) => { ... },
+  // Note: Journal v2 -> v3 migration (array to individual trades) is handled
+  // in state.js during initialization, not here. It requires storage-level
+  // operations that can't be done in a simple data transform.
 };
 
 /**
