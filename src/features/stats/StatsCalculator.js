@@ -12,6 +12,7 @@ import eodCacheManager from '../../core/eodCacheManager.js';
 import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 import { calculateRealizedPnL, getTradeRealizedPnL } from '../../core/utils/tradeCalculations.js';
 import { isOpenTrade } from '../../shared/TradeFilters.js';
+import { historicalPricesBatcher } from './HistoricalPricesBatcher.js';
 
 export class StatsCalculator {
   /**
@@ -194,7 +195,7 @@ export class StatsCalculator {
    * Calculate P&L using equity curve
    * This is the NEW simplified approach using equity curve as source of truth
    */
-  calculatePnL(dateFrom, dateTo) {
+  async calculatePnL(dateFrom, dateTo) {
     const allEntries = state.journal.entries;
     const startingAccountSize = state.settings.startingAccountSize;
 
@@ -236,7 +237,7 @@ export class StatsCalculator {
 
       // If not in curve yet, fall back to manual calculation
       if (startBalance === null) {
-        startBalance = this._calculateBalanceAtDate(dayBeforeStr);
+        startBalance = await this._calculateBalanceAtDate(dayBeforeStr);
       }
 
       startDateStr = dayBeforeStr;
@@ -250,7 +251,7 @@ export class StatsCalculator {
 
     // If no cached data for historical date, fall back to manual calculation
     if (endBalance === null) {
-      endBalance = this._calculateBalanceAtDate(endDateStr);
+      endBalance = await this._calculateBalanceAtDate(endDateStr);
     }
 
     // Calculate net cash flow in range
@@ -270,61 +271,59 @@ export class StatsCalculator {
   /**
    * Fallback: Calculate balance at a specific date (used when curve not available)
    */
-  _calculateBalanceAtDate(dateStr) {
-    const allEntries = state.journal.entries;
-    const startingBalance = state.settings.startingAccountSize;
-    const targetDate = this._parseDate(dateStr);
-    targetDate.setHours(23, 59, 59, 999);
+  async _calculateBalanceAtDate(dateStr) {
+    const todayStr = formatDate(getCurrentWeekday());
+    const isToday = dateStr === todayStr;
 
-    // Get closed trades before or on this date
-    const closedTradesBeforeDate = allEntries
-      .filter(e => e.status === 'closed' || e.status === 'trimmed')
-      .filter(e => {
-        if (!e.exitDate) return false;
-        const closeDate = new Date(e.exitDate);
-        closeDate.setHours(0, 0, 0, 0);
-        return closeDate <= targetDate;
+    let prices;
+    if (isToday) {
+      // For today, use current live prices from priceTracker
+      prices = priceTracker.getPricesAsObject();
+    } else {
+      // For historical dates, fetch historical closing prices
+      prices = {};
+
+      // Get all unique tickers from trades that were open on this date
+      const targetDate = this._parseDate(dateStr);
+      const allTrades = state.journal.entries;
+
+      const openOnDate = allTrades.filter(trade => {
+        const entryDate = new Date(trade.timestamp);
+        entryDate.setHours(0, 0, 0, 0);
+
+        // Must be entered before or on this date
+        if (entryDate > targetDate) return false;
+
+        // If closed, must close after this date
+        if (trade.exitDate) {
+          const closeDate = new Date(trade.exitDate);
+          closeDate.setHours(0, 0, 0, 0);
+          if (closeDate <= targetDate) return false;
+        }
+
+        return true;
       });
 
-    const realizedPnL = closedTradesBeforeDate.reduce((sum, t) => sum + getTradeRealizedPnL(t), 0);
+      const tickers = [...new Set(openOnDate.map(t => t.ticker).filter(Boolean))];
 
-    // Get cash flow before or on this date
-    const cashFlowBeforeDate = (state.cashFlow?.transactions || [])
-      .filter(tx => {
-        const txDate = new Date(tx.timestamp);
-        txDate.setHours(0, 0, 0, 0);
-        return txDate <= targetDate;
-      })
-      .reduce((sum, tx) => sum + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
-
-    // Get unrealized P&L on this date (simplified - uses current prices as fallback)
-    const openTrades = allEntries.filter(e => {
-      const entryDate = new Date(e.timestamp);
-      entryDate.setHours(0, 0, 0, 0);
-
-      // Must be entered before or on this date
-      if (entryDate > targetDate) return false;
-
-      // If closed, must close after this date (not on or before)
-      if (e.status === 'closed' && e.exitDate) {
-        const closeDate = new Date(e.exitDate);
-        closeDate.setHours(0, 0, 0, 0);
-        if (closeDate < targetDate) return false;
-      }
-
-      return isOpenTrade(e);
-    });
-
-    // Calculate unrealized P&L for open trades (simplified fallback)
-    let unrealizedPnL = 0;
-    for (const trade of openTrades) {
-      const pnl = priceTracker.calculateUnrealizedPnL(trade);
-      if (pnl) {
-        unrealizedPnL += pnl.unrealizedPnL;
+      // Fetch historical prices for each ticker
+      for (const ticker of tickers) {
+        const price = await historicalPricesBatcher.getPriceOnDate(ticker, dateStr);
+        if (price) {
+          prices[ticker] = price;
+        }
       }
     }
 
-    return startingBalance + realizedPnL + cashFlowBeforeDate + unrealizedPnL;
+    // Use accountBalanceCalculator to properly calculate balance with the prices
+    const balanceData = accountBalanceCalculator.calculateBalanceAtDate(dateStr, {
+      startingBalance: state.settings.startingAccountSize,
+      allTrades: state.journal.entries,
+      cashFlowTransactions: state.cashFlow.transactions,
+      eodPrices: prices
+    });
+
+    return balanceData.balance;
   }
 
 

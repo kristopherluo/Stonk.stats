@@ -138,9 +138,19 @@ class PnLCalendar {
           // Delegate to StatsCalculator.getBalanceForDate() - single source of truth
           balance = this.statsCalculator.getBalanceForDate(dateStr);
 
-          // Get cash flow from EOD cache (only available for historical dates)
+          // Get cash flow from EOD cache for historical dates, or calculate for today
           const today = marketHours.formatDate(getCurrentWeekday());
-          if (dateStr !== today) {
+          if (dateStr === today) {
+            // For today, calculate cash flow from transactions
+            cashFlow = (state.cashFlow?.transactions || [])
+              .filter(tx => {
+                const txDate = new Date(tx.timestamp);
+                const txDateStr = marketHours.formatDate(txDate);
+                return txDateStr === dateStr;
+              })
+              .reduce((sum, tx) => sum + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
+          } else {
+            // For historical dates, use EOD cache
             const eodData = eodCacheManager.getEODData(dateStr);
             if (eodData) {
               cashFlow = eodData.cashFlow || 0;
@@ -159,11 +169,21 @@ class PnLCalendar {
           // First trading day - use starting account size
           prevBalance = startingAccountSize;
         } else {
-          const prevEodData = eodCacheManager.getEODData(prevDateStr);
-          if (prevEodData && !prevEodData.incomplete) {
-            prevBalance = prevEodData.balance;
+          // Use centralized balance lookup for previous day
+          if (this.statsCalculator) {
+            prevBalance = this.statsCalculator.getBalanceForDate(prevDateStr);
+            // If still null, use starting balance as fallback
+            if (prevBalance === null) {
+              prevBalance = startingAccountSize;
+            }
           } else {
-            prevBalance = startingAccountSize;
+            // Fallback to EOD cache if no calculator available
+            const prevEodData = eodCacheManager.getEODData(prevDateStr);
+            if (prevEodData && !prevEodData.incomplete) {
+              prevBalance = prevEodData.balance;
+            } else {
+              prevBalance = startingAccountSize;
+            }
           }
         }
 

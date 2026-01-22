@@ -14,6 +14,7 @@ import { FilterPopup } from '../../shared/FilterPopup.js';
 import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 import { createLogger } from '../../utils/logger.js';
 import { getOpenTrades, isOpenTrade } from '../../shared/TradeFilters.js';
+import * as marketHours from '../../utils/marketHours.js';
 const logger = createLogger('PositionsView');
 
 class PositionsView {
@@ -862,7 +863,10 @@ class PositionsView {
 
     // Set up 1-minute auto-refresh
     this.autoRefreshInterval = setInterval(() => {
-      this.refreshPrices(true);
+      // Only refresh during market hours to avoid after-hours prices
+      if (marketHours.isMarketOpen()) {
+        this.refreshPrices(true);
+      }
     }, 60000); // 60 seconds
   }
 

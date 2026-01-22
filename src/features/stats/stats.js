@@ -473,7 +473,7 @@ class Stats {
       .reduce((sum, tx) => sum + tx.amount, 0);
 
     // Calculate P&L using NEW simplified approach (equity curve lookup)
-    const pnlResult = this.calculator.calculatePnL(filterState.dateFrom, filterState.dateTo);
+    const pnlResult = await this.calculator.calculatePnL(filterState.dateFrom, filterState.dateTo);
 
     // Calculate percentages
     const tradingGrowth = pnlResult.startingBalance > 0
@@ -832,7 +832,10 @@ class Stats {
 
     // Set up 60-second interval
     this.autoRefreshInterval = setInterval(() => {
-      this.refreshPrices(true);
+      // Only refresh during market hours to avoid after-hours prices
+      if (marketHours.isMarketOpen()) {
+        this.refreshPrices(true);
+      }
     }, AUTO_REFRESH_INTERVAL_MS);
 
     logger.debug('[Stats] Started auto-refresh (60s interval)');

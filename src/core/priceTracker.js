@@ -132,9 +132,13 @@ export const priceTracker = {
       }
 
       // Finnhub returns: c (current), h (high), l (low), o (open), pc (previous close)
+      // Use previous close when market is closed to avoid after-hours prices
+      const isMarketOpen = marketHours.isMarketOpen();
+      const priceToUse = isMarketOpen ? data.c : data.pc;
+
       return {
         ticker: ticker.toUpperCase(),
-        price: data.c,
+        price: priceToUse,
         change: data.d,
         changePercent: data.dp,
         timestamp: Date.now()
@@ -433,6 +437,12 @@ export const priceTracker = {
   },
 
   async refreshAllActivePrices() {
+    // Only refresh prices during market hours to avoid after-hours contamination
+    if (!marketHours.isMarketOpen()) {
+      logger.debug('[PriceTracker] Market closed, skipping price refresh');
+      return { success: [], failed: [] };
+    }
+
     const trades = state.journal.entries;
     const activeTrades = getOpenTrades(trades);
     const tickers = [...new Set(activeTrades.map(t => t.ticker).filter(Boolean))];
