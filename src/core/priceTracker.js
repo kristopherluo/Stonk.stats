@@ -436,9 +436,10 @@ export const priceTracker = {
     return results;
   },
 
-  async refreshAllActivePrices() {
+  async refreshAllActivePrices(forceAfterHours = false) {
     // Only refresh prices during market hours to avoid after-hours contamination
-    if (!marketHours.isMarketOpen()) {
+    // Exception: allow forcing fetch after hours for EOD snapshot (will use previous close prices)
+    if (!marketHours.isMarketOpen() && !forceAfterHours) {
       logger.debug('[PriceTracker] Market closed, skipping price refresh');
       return { success: [], failed: [] };
     }

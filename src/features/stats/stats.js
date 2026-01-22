@@ -868,8 +868,13 @@ class Stats {
         return;
       }
 
-      // Fetch current prices from Finnhub
-      await priceTracker.refreshAllActivePrices();
+      // Check if market is closed and if we need to fetch closing prices for EOD
+      const isAfterClose = marketHours.isAfterMarketClose();
+      const tradingDay = marketHours.getTradingDay();
+      const needsEOD = isAfterClose && !eodCacheManager.hasEODData(tradingDay);
+
+      // Fetch prices (will use previous close if after hours, for EOD snapshot)
+      await priceTracker.refreshAllActivePrices(needsEOD);
 
       // Check if we should save EOD snapshot
       await this.checkAndSaveEOD();
