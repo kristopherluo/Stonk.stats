@@ -367,6 +367,8 @@
     inset 0 -1px 1px rgba(0, 0, 0, 0.5);
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   transform-style: preserve-3d;
   transform: none;
 }
@@ -541,6 +543,26 @@
 .position-card--animate:nth-child(28) { animation-delay: 2160ms; }
 .position-card--animate:nth-child(29) { animation-delay: 2240ms; }
 .position-card--animate:nth-child(30) { animation-delay: 2320ms; }
+.position-card--animate:nth-child(31) { animation-delay: 2400ms; }
+.position-card--animate:nth-child(32) { animation-delay: 2480ms; }
+.position-card--animate:nth-child(33) { animation-delay: 2560ms; }
+.position-card--animate:nth-child(34) { animation-delay: 2640ms; }
+.position-card--animate:nth-child(35) { animation-delay: 2720ms; }
+.position-card--animate:nth-child(36) { animation-delay: 2800ms; }
+.position-card--animate:nth-child(37) { animation-delay: 2880ms; }
+.position-card--animate:nth-child(38) { animation-delay: 2960ms; }
+.position-card--animate:nth-child(39) { animation-delay: 3040ms; }
+.position-card--animate:nth-child(40) { animation-delay: 3120ms; }
+.position-card--animate:nth-child(41) { animation-delay: 3200ms; }
+.position-card--animate:nth-child(42) { animation-delay: 3280ms; }
+.position-card--animate:nth-child(43) { animation-delay: 3360ms; }
+.position-card--animate:nth-child(44) { animation-delay: 3440ms; }
+.position-card--animate:nth-child(45) { animation-delay: 3520ms; }
+.position-card--animate:nth-child(46) { animation-delay: 3600ms; }
+.position-card--animate:nth-child(47) { animation-delay: 3680ms; }
+.position-card--animate:nth-child(48) { animation-delay: 3760ms; }
+.position-card--animate:nth-child(49) { animation-delay: 3840ms; }
+.position-card--animate:nth-child(50) { animation-delay: 3920ms; }
 
 .position-card--options {
   background:
@@ -733,7 +755,7 @@
     radial-gradient(circle at 100% 50%, rgba(245, 158, 11, 0.1) 0%, transparent 60%),
     linear-gradient(145deg, #121212 0%, #000000 100%);
   border-radius: var(--border-radius);
-  margin-bottom: var(--space-4);
+  margin-top: auto;
   border-left: 3px solid var(--danger);
   box-shadow:
     inset 0 1px 2px rgba(0, 0, 0, 0.8),

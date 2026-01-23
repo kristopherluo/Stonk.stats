@@ -1088,9 +1088,9 @@ class Stats {
     } else {
       tradesContainer.classList.remove('selected-day-trades--empty');
 
-      // Use shared journal table renderer
+      // Use shared journal table renderer with animation
       const tradesHTML = await renderJournalTableRows(trades, {
-        shouldAnimate: false,
+        shouldAnimate: true,
         expandedRows: new Set(),
         statsPageMode: true
       });
