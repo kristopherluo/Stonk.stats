@@ -8,11 +8,9 @@ import { showToast } from '../../components/ui/ui.js';
 import { dataManager } from '../../core/dataManager.js';
 import { clearDataModal } from '../../components/modals/clearDataModal.js';
 import { priceTracker } from '../../core/priceTracker.js';
-import { historicalPricesBatcher } from '../stats/HistoricalPricesBatcher.js';
 import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 import { getStorageUsage, formatBytes, getStorageBreakdownPercent } from '../../utils/storageMonitor.js';
 import { storage } from '../../utils/storage.js';
-import eodCacheManager from '../../core/eodCacheManager.js';
 import { formatDate } from '../../utils/marketHours.js';
 import { StatsCalculator } from '../stats/StatsCalculator.js';
 import { createLogger } from '../../utils/logger.js';
@@ -310,7 +308,7 @@ class Settings {
     if (this.elements.twelveDataApiKey && this.elements.twelveDataApiKeyBtn) {
       const saveTwelveDataKey = async (apiKey) => {
         await storage.setItem('twelveDataApiKey', apiKey);
-        historicalPricesBatcher.setApiKey(apiKey);
+        // Twelve Data still used for Journal trade charts
         if (apiKey) {
           // Update button to active state
           this.setApiKeyButtonActive(this.elements.twelveDataApiKeyBtn);
@@ -481,10 +479,6 @@ class Settings {
   }
 
   async loadAndApply() {
-    // Initialize async storage managers
-    await eodCacheManager.init();
-    await historicalPricesBatcher.init();
-
     // Load saved settings (async with IndexedDB)
     await state.loadSettings();
     await state.loadJournal();
@@ -522,7 +516,6 @@ class Settings {
     }
     // Load API key into batcher
     if (twelveDataKey) {
-      historicalPricesBatcher.setApiKey(twelveDataKey);
       this.setApiKeyButtonActive(this.elements.twelveDataApiKeyBtn);
     }
 
@@ -1073,22 +1066,10 @@ class Settings {
 
   /**
    * Handle clear old data button click
+   * NOTE: Historical price data no longer stored (using realized trades only)
    */
   async handleClearOldData() {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 30);
-    const cutoffDateStr = formatDate(cutoffDate);
-
-    const removedCount = historicalPricesBatcher.cleanupPricesOlderThan(
-      cutoffDateStr,
-      state.journal.entries
-    );
-
-    if (removedCount > 0) {
-      showToast(`Cleaned up ${removedCount} old price data points`, 'success');
-    } else {
-      showToast('No old price data to clean up', 'info');
-    }
+    showToast('No historical price data to clean up (Stats now use realized trades only)', 'info');
 
     // Update storage display
     await this.updateStorageMonitor();

@@ -13,7 +13,6 @@
  */
 
 import { state } from '../core/state.js';
-import eodCacheManager from '../core/eodCacheManager.js';
 import { calculateRealizedPnL, getTradeRealizedPnL } from '../core/utils/tradeCalculations.js';
 import { formatDate } from '../utils/marketHours.js';
 import { getCashFlowOnDate, getTransactionDateString, getNetCashFlow, getCashFlowUpToDate } from '../utils/cashFlowUtils.js';
@@ -91,13 +90,8 @@ class AccountBalanceCalculator {
     // Calculate cash flow up to this date
     const cashFlow = this._calculateCashFlowUpToDate(cashFlowTransactions, dateStr);
 
-    // Get EOD prices for this date
-    let prices = eodPrices;
-    if (!prices) {
-      // Try to get from EOD cache
-      const eodData = eodCacheManager.getEODData(dateStr);
-      prices = eodData?.stockPrices || {};
-    }
+    // Use provided EOD prices (or empty object if not provided)
+    const prices = eodPrices || {};
 
     // Calculate unrealized P&L using EOD prices
     const unrealizedPnL = this._calculateUnrealizedPnLWithPrices(tradesOpenOnDate, prices, dateStr);

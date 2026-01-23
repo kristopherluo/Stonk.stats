@@ -48,7 +48,7 @@
   <link rel="stylesheet" href="src/styles/nav.css">
   <link rel="stylesheet" href="src/features/positions/positions.css">
   <link rel="stylesheet" href="src/features/journal/journal.css">
-  <link rel="stylesheet" href="src/features/stats/stats.css">
+  <link rel="stylesheet" href="src/features/stats/stats.css?v=38">
   <link rel="stylesheet" href="src/features/stats/pnlCalendar.css">
   <link rel="stylesheet" href="src/components/styles/storageMonitor.css">
   <link rel="stylesheet" href="src/styles/flatpickr-theme.css">
@@ -249,7 +249,7 @@
           <span class="journal-summary-bar__value journal-summary-bar__value--lg" id="journalTotalPnL">$0.00</span>
         </div>
         <div class="journal-summary-bar__item">
-          <span class="journal-summary-bar__label">Win Rate</span>
+          <span class="journal-summary-bar__label">Trade Win %</span>
           <span class="journal-summary-bar__value" id="journalWinRate">—</span>
         </div>
         <div class="journal-summary-bar__divider"></div>
@@ -424,6 +424,11 @@
 
     <!-- Stats View (view swapped with main) -->
     <section class="stats-view view--hidden" id="statsView">
+      <!-- Stats Note -->
+      <div class="stats-note">
+        All stats are calculated from realized trades only
+      </div>
+
       <!-- Stats Overview Container: Filters, Stats Cards, and Equity Curve -->
       <div class="stats-overview-container">
         <div class="stats-header">
@@ -482,54 +487,54 @@
       <div class="stats-top-row">
         <!-- Left Column: Stat Cards -->
         <div class="stats-cards-column">
-          <!-- Trading Performance Section -->
+          <!-- Account Value Section -->
           <div class="stats-section">
             <div class="stats-grid">
               <div class="stat-card stat-card--highlight">
-                <span class="stat-card__label">Current Account</span>
+                <span class="stat-card__label">Realized Account Value</span>
                 <span class="stat-card__value" id="statOpenPositions">$0</span>
-                <span class="stat-card__sub" id="statOpenRisk">$0 at risk</span>
+                <span class="stat-card__sub" id="statOpenRisk"><strong>EXCLUDES unrealized P&L</strong></span>
               </div>
-              <div class="stat-card">
-                <span class="stat-card__label">Win Rate</span>
-                <span class="stat-card__value" id="statWinRate">—</span>
-                <span class="stat-card__sub" id="statWinLoss">0W / 0L</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-card__label">Avg Win/Loss</span>
-                <span class="stat-card__value" id="statSharpe">—</span>
-                <span class="stat-card__sub">Reward/risk ratio</span>
-              </div>
-              <div class="stat-card" id="statExpectancyCard">
-                <span class="stat-card__label">Trade Expectancy</span>
-                <span class="stat-card__value" id="statExpectancy">$0.00</span>
-                <span class="stat-card__sub">Expected $/trade</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Account Growth Section -->
-          <div class="stats-section">
-            <div class="stats-grid">
               <div class="stat-card" id="statCurrentAccountCard">
-                <span class="stat-card__label">Trading P&L</span>
+                <span class="stat-card__label">Realized P&L</span>
                 <span class="stat-card__value" id="statCurrentAccount">$0.00</span>
                 <span class="stat-card__sub" id="statAccountChange">From starting account $0</span>
               </div>
               <div class="stat-card" id="statTradingGrowthCard">
-                <span class="stat-card__label">Trading P&L %</span>
+                <span class="stat-card__label">Realized P&L %</span>
                 <span class="stat-card__value" id="statTradingGrowth">0.00%</span>
                 <span class="stat-card__sub">P&L / starting</span>
-              </div>
-              <div class="stat-card" id="statPnLCard">
-                <span class="stat-card__label">Realized P&L</span>
-                <span class="stat-card__value" id="statTotalPnL">$0.00</span>
-                <span class="stat-card__sub" id="statPnLTrades">0 closed trades</span>
               </div>
               <div class="stat-card" id="statCashFlowCard">
                 <span class="stat-card__label">Net Cash Flow</span>
                 <span class="stat-card__value" id="statCashFlow">$0.00</span>
                 <span class="stat-card__sub">(Deposits - withdrawals)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trading Performance Section -->
+          <div class="stats-section">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <span class="stat-card__label">Trade Win Rate</span>
+                <span class="stat-card__value" id="statWinRate">—</span>
+                <span class="stat-card__sub" id="statWinLoss">0W / 0L</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-card__label">Payoff Ratio</span>
+                <span class="stat-card__value" id="statSharpe">—</span>
+                <span class="stat-card__sub">(<span class="stat-card__sub--success-glow">Avg win</span> / <span class="stat-card__sub--danger">avg loss</span>)</span>
+              </div>
+              <div class="stat-card" id="statProfitFactorCard">
+                <span class="stat-card__label">Profit Factor</span>
+                <span class="stat-card__value" id="statProfitFactor">—</span>
+                <span class="stat-card__sub" id="statProfitFactorSub">Total wins / total losses</span>
+              </div>
+              <div class="stat-card" id="statExpectancyCard">
+                <span class="stat-card__label">Trade Expectancy</span>
+                <span class="stat-card__value" id="statExpectancy">$0.00</span>
+                <span class="stat-card__sub">Expected P&L per trade</span>
               </div>
             </div>
           </div>
@@ -568,6 +573,7 @@
         <div class="stats-details-row">
           <!-- Left: P&L Calendar -->
           <div class="stats-calendar-column">
+            <h3 class="stats-section-header">P&L Calendar</h3>
             <div id="pnlCalendar" class="pnl-calendar">
               <!-- Calendar component renders here -->
             </div>
@@ -575,7 +581,14 @@
 
           <!-- Right: Trades for Selected Day -->
           <div class="stats-trades-column">
-            <div id="selectedDayDateRange" class="selected-day-trades__date-range"></div>
+            <h3 class="stats-section-header">
+              Trades
+              <div class="toggle-switch toggle-switch--sm" id="tradesToggle" data-active="0">
+                <button type="button" class="toggle-switch__option active" data-mode="opened">Opened</button>
+                <button type="button" class="toggle-switch__option" data-mode="closed">Closed</button>
+              </div>
+              <span id="selectedDayDateRange" class="stats-section-header__date"></span>
+            </h3>
             <div id="selectedDayTrades" class="selected-day-trades">
               <div class="selected-day-trades__empty">
                 Loading...
@@ -768,7 +781,7 @@
             Polygon API Key
             <span class="tooltip">
               <span class="tooltip__icon">?</span>
-              <span class="tooltip__content">Get a free API key at <a href="https://polygon.io/dashboard/signup" target="_blank" style="color: var(--color-primary);">polygon.io</a>. Used to fetch EOD (end-of-day) options prices for unrealized P&L tracking.<br><br><strong>Important:</strong> Visit this page daily after market close to save historical prices. Polygon's free tier doesn't provide historical options data - only the most recent market close. If you miss a day, that day's unrealized P&L cannot be recovered.<br><br>Rate limit: 5 API calls/minute on free tier.</span>
+              <span class="tooltip__content">Get a free API key at <a href="https://polygon.io/dashboard/signup" target="_blank" style="color: var(--color-primary);">polygon.io</a>. Used to fetch current options prices for unrealized P&L tracking on the Positions page. Options prices auto-refresh every 1 minute during market hours. (5 API calls/minute on free tier)</span>
             </span>
           </label>
           <div class="input-with-btn">
@@ -1452,6 +1465,6 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
-  <script type="module" src="src/main.js?v=37"></script>
+  <script type="module" src="src/main.js?v=73"></script>
 </body>
 </html>

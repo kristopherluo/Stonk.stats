@@ -190,6 +190,10 @@
   min-width: 0;
 }
 
+.stats-trades-column .stats-section-header {
+  margin-top: -7px;
+}
+
 /* Responsive: Stack vertically on smaller screens */
 @media (max-width: 1600px) {
   .stats-details-row {
@@ -319,7 +323,7 @@
   display: block;
   font-size: var(--text-xs);
   color: var(--text-muted);
-  margin-top: var(--space-1);
+  margin-top: var(--space-2);
 }
 
 .stat-card__sub--danger {
@@ -468,11 +472,9 @@
 
 .stats-chart__title {
   font-family: var(--font-mono);
-  font-size: var(--text-xl);
-  font-weight: var(--font-bold);
-  color: #ffffff;
-  letter-spacing: 0.05em;
-  text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
   margin: 0;
   display: flex;
   align-items: center;
@@ -541,6 +543,7 @@
     linear-gradient(145deg, #0a0a0a 0%, #000000 100%);
   border: 1px solid rgba(139, 92, 246, 0.3);
   border-radius: var(--border-radius-lg);
+  max-height: 492px;
   overflow-y: auto;
   overflow-x: hidden;
   box-shadow:
@@ -914,4 +917,76 @@
 @keyframes tickerShimmer {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
+}
+
+/* === Stats Note === */
+.stats-note {
+  position: sticky;
+  top: 0 !important;
+  z-index: 10;
+  text-align: center;
+  padding: var(--space-2) var(--space-4);
+  margin-top: 0 !important;
+  margin-bottom: var(--space-6);
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 600px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.08) 0%, transparent 70%),
+    linear-gradient(145deg, rgba(10, 10, 10, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: var(--border-radius-lg);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.7),
+    0 0 24px rgba(139, 92, 246, 0.15),
+    inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  letter-spacing: 0.01em;
+}
+
+/* === Stats Section Headers === */
+.stats-section-header {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.stats-section-header .toggle-switch {
+  margin: 0;
+}
+
+.stats-section-header .toggle-switch__option {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.stats-section-header .toggle-switch__option[data-mode="closed"].active {
+  color: rgba(255, 255, 255, 0.95) !important;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.12) 0%, transparent 70%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.7),
+    0 0 16px rgba(255, 255, 255, 0.2),
+    inset 0 0 12px rgba(255, 255, 255, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.5) !important;
+}
+
+.stats-section-header__date {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-left: auto;
 }

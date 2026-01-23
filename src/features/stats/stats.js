@@ -7,14 +7,12 @@ import { state } from '../../core/state.js';
 import { showToast } from '../../components/ui/ui.js';
 import { initFlatpickr, getCurrentWeekday } from '../../core/utils.js';
 import { incrementalStatsCalculator } from './IncrementalStatsCalculator.js';
-import { equityCurveManager } from './EquityCurveManager.js';
 import { DateRangeFilter } from '../../shared/DateRangeFilter.js';
 import { FilterPopup } from '../../shared/FilterPopup.js';
 import { sharedMetrics } from '../../shared/SharedMetrics.js';
 import { EquityChart } from './statsChart.js';
 import { pnlCalendar } from './PnLCalendar.js';
 import { priceTracker } from '../../core/priceTracker.js';
-import eodCacheManager from '../../core/eodCacheManager.js';
 import accountBalanceCalculator from '../../shared/AccountBalanceCalculator.js';
 import * as marketHours from '../../utils/marketHours.js';
 import { getTradeEntryDateString } from '../../utils/tradeUtils.js';
@@ -65,6 +63,9 @@ class Stats {
       pnlTrades: document.getElementById('statPnLTrades'),
       winRate: document.getElementById('statWinRate'),
       winLoss: document.getElementById('statWinLoss'),
+      profitFactor: document.getElementById('statProfitFactor'),
+      profitFactorCard: document.getElementById('statProfitFactorCard'),
+      profitFactorSub: document.getElementById('statProfitFactorSub'),
       sharpe: document.getElementById('statSharpe'),
       expectancy: document.getElementById('statExpectancy'),
 
@@ -110,83 +111,43 @@ class Stats {
     // The auto-select of today will happen after the calendar renders
     this.calendar.init();
 
-    // Listen for journal changes - use SMART invalidation for specific trades
-    state.on('journalEntryAdded', (entry) => {
-      try {
-        equityCurveManager.invalidateForTrade(entry);
-        this.calculator.invalidateCache(); // Invalidate stats cache
-        // Only refresh if currently on stats page
-        if (state.ui.currentView === 'stats') {
-          sharedMetrics.recalculateAll();
-          this.refresh();
-        }
-      } catch (error) {
-        logger.error('Error in journalEntryAdded handler:', error);
+    // Initialize trades toggle (Opened/Closed)
+    this.currentTradesMode = 'opened'; // Default to showing opened trades
+    this.setupTradesToggle();
+
+    // Listen for journal changes
+    state.on('journalEntryAdded', () => {
+      this.calculator.invalidateCache();
+      if (state.ui.currentView === 'stats') {
+        sharedMetrics.recalculateAll();
+        this.refresh();
       }
     });
-    state.on('journalEntryUpdated', (entry) => {
-      try {
-        equityCurveManager.invalidateForTrade(entry);
-        this.calculator.invalidateCache(); // Invalidate stats cache
-        // Only refresh if currently on stats page
-        if (state.ui.currentView === 'stats') {
-          sharedMetrics.recalculateAll();
-          this.refresh();
-        }
-      } catch (error) {
-        logger.error('Error in journalEntryUpdated handler:', error);
+    state.on('journalEntryUpdated', () => {
+      this.calculator.invalidateCache();
+      if (state.ui.currentView === 'stats') {
+        sharedMetrics.recalculateAll();
+        this.refresh();
       }
     });
-    state.on('journalEntryDeleted', (entry) => {
-      try {
-        equityCurveManager.invalidateForTrade(entry);
-        this.calculator.invalidateCache(); // Invalidate stats cache
-        // Only refresh if currently on stats page
-        if (state.ui.currentView === 'stats') {
-          sharedMetrics.recalculateAll();
-          this.refresh();
-        }
-      } catch (error) {
-        logger.error('Error in journalEntryDeleted handler:', error);
+    state.on('journalEntryDeleted', () => {
+      this.calculator.invalidateCache();
+      if (state.ui.currentView === 'stats') {
+        sharedMetrics.recalculateAll();
+        this.refresh();
       }
     });
     state.on('accountSizeChanged', () => {
-      // Starting balance changed - affects all days
-      eodCacheManager.clearAllData();
-      // Only refresh if currently on stats page
       if (state.ui.currentView === 'stats') {
         this.refresh();
       }
     });
-    state.on('cashFlowChanged', (cashFlow) => {
-      try {
-        // Cash flow changed - find earliest transaction and invalidate from there
-        if (cashFlow && cashFlow.transactions && cashFlow.transactions.length > 0) {
-          const dates = cashFlow.transactions.map(tx => new Date(tx.timestamp));
-          const earliestDate = new Date(Math.min(...dates.map(d => d.getTime())));
-
-          const dateStr = marketHours.formatDate(earliestDate);
-          equityCurveManager.invalidateFromDate(dateStr);
-        } else {
-          eodCacheManager.clearAllData();
-        }
-        // Only refresh if currently on stats page
-        if (state.ui.currentView === 'stats') {
-          this.refresh();
-        }
-      } catch (error) {
-        logger.error('Error in cashFlowChanged handler:', error);
-        // Fallback to full invalidation
-        eodCacheManager.clearAllData();
-        if (state.ui.currentView === 'stats') {
-          this.refresh();
-        }
+    state.on('cashFlowChanged', () => {
+      if (state.ui.currentView === 'stats') {
+        this.refresh();
       }
     });
     state.on('settingsChanged', () => {
-      // Settings changed - affects all days (could be starting balance, etc.)
-      eodCacheManager.clearAllData();
-      // Only refresh if currently on stats page
       if (state.ui.currentView === 'stats') {
         this.refresh();
       }
@@ -238,8 +199,12 @@ class Stats {
     // Initial calculation and render - ONLY if stats view is active
     const statsView = document.getElementById('statsView');
     if (statsView && statsView.classList.contains('view--active')) {
-      this.refresh();
-      setTimeout(() => this.animateStatCards(), 100);
+      // Add delay to ensure DOM is fully ready (especially for chart rendering)
+      // Use same delay as viewChanged handler to ensure consistent behavior
+      this.animateStatCards();
+      setTimeout(() => {
+        this.refresh();
+      }, VIEW_TRANSITION_DELAY_MS);
     }
   }
 
@@ -298,6 +263,35 @@ class Stats {
       this.elements.dateFrom?.classList.remove('preset-value');
       this.elements.dateTo.classList.remove('preset-value');
       this.elements.datePresetBtns?.forEach(btn => btn.classList.remove('active'));
+    });
+  }
+
+  setupTradesToggle() {
+    const toggle = document.getElementById('tradesToggle');
+    if (!toggle) return;
+
+    const options = toggle.querySelectorAll('.toggle-switch__option');
+
+    options.forEach(option => {
+      option.addEventListener('click', () => {
+        const mode = option.dataset.mode;
+
+        // Update active state
+        options.forEach(opt => opt.classList.remove('active'));
+        option.classList.add('active');
+
+        // Update data-active attribute for CSS animations
+        const index = Array.from(options).indexOf(option);
+        toggle.setAttribute('data-active', index);
+
+        // Update current mode
+        this.currentTradesMode = mode;
+
+        // Re-render trades with the new mode
+        if (this.selectedDate || this.selectedWeekRange) {
+          this.handleCalendarDayClick(this.selectedDate, this.selectedWeekRange);
+        }
+      });
     });
   }
 
@@ -427,82 +421,71 @@ class Stats {
   async calculate() {
     const allEntries = state.journal.entries;
     const filterState = this.filters.getActiveFilter();
-
-    // Build FULL equity curve (no filters) to ensure accurate balance calculations
-    // Filtering happens at display level, not calculation level
-    await equityCurveManager.buildEquityCurve(null, null);
-
-    // Get filtered trades
     const filteredTrades = this.filters.getFilteredTrades(allEntries);
+    const startingBalance = state.settings.startingAccountSize;
 
-    // Calculate all metrics using new modular calculators
-    const currentAccount = this.calculator.calculateCurrentAccount();
-    const openRisk = sharedMetrics.getOpenRisk(); // Shared with Positions page!
+    // Calculate realized P&L for both filtered and all trades (two calls required for different scopes)
     const realizedPnL = this.calculator.calculateRealizedPnL(filteredTrades);
+    const allTradesRealizedPnL = this.calculator.calculateRealizedPnL(allEntries);
+
+    // Get cash flow breakdown (eliminates duplicate filtering logic)
+    const cashFlowBreakdown = this.calculator.calculateCashFlowBreakdown(
+      filterState.dateFrom,
+      filterState.dateTo
+    );
+
+    // Calculate realized account balance from all trades
+    const realizedAccount = startingBalance + allTradesRealizedPnL + cashFlowBreakdown.net;
+
+    // Get all trade metrics (eliminates duplicate filtering and calculations)
     const winsLosses = this.calculator.calculateWinsLosses(filteredTrades);
     const winRate = this.calculator.calculateWinRate(filteredTrades);
+    const profitFactor = this.calculator.calculateProfitFactor(filteredTrades);
     const avgWinLossRatio = this.calculator.calculateAvgWinLossRatio(filteredTrades);
     const tradeExpectancy = this.calculator.calculateTradeExpectancy(filteredTrades);
-    const netCashFlow = this.calculator.calculateNetCashFlow(filterState.dateFrom, filterState.dateTo);
 
-    // Calculate deposits and withdrawals separately for breakdown display
-    const cashFlowTransactions = state.cashFlow?.transactions || [];
-    const filteredTransactions = filterState.dateFrom || filterState.dateTo
-      ? cashFlowTransactions.filter(tx => {
-          const txDate = new Date(tx.timestamp);
-          txDate.setHours(0, 0, 0, 0);
-          const txDateStr = marketHours.formatDate(txDate);
+    // Get shared metrics
+    const openRisk = sharedMetrics.getOpenRisk();
 
-          let inRange = true;
-          if (filterState.dateFrom) {
-            inRange = inRange && txDateStr >= filterState.dateFrom;
-          }
-          if (filterState.dateTo) {
-            inRange = inRange && txDateStr <= filterState.dateTo;
-          }
-          return inRange;
-        })
-      : cashFlowTransactions;
+    // Get earliest trade date for display
+    const earliestTradeDate = allEntries.length > 0
+      ? allEntries
+          .filter(e => e.timestamp)
+          .map(e => new Date(e.timestamp))
+          .reduce((min, date) => date < min ? date : min, new Date())
+      : new Date();
 
-    const deposits = filteredTransactions
-      .filter(tx => tx.type === 'deposit')
-      .reduce((sum, tx) => sum + tx.amount, 0);
+    const startDateStr = marketHours.formatDate(earliestTradeDate);
 
-    const withdrawals = filteredTransactions
-      .filter(tx => tx.type === 'withdrawal')
-      .reduce((sum, tx) => sum + tx.amount, 0);
-
-    // Calculate P&L using NEW simplified approach (equity curve lookup)
-    const pnlResult = await this.calculator.calculatePnL(filterState.dateFrom, filterState.dateTo);
-
-    // Calculate percentages
-    const tradingGrowth = pnlResult.startingBalance > 0
-      ? (pnlResult.pnl / pnlResult.startingBalance) * 100
+    // Calculate growth percentages
+    const tradingGrowth = startingBalance > 0
+      ? (realizedPnL / startingBalance) * 100
       : 0;
 
-    const totalGrowth = pnlResult.startingBalance > 0
-      ? ((pnlResult.pnl + netCashFlow) / pnlResult.startingBalance) * 100
+    const totalGrowth = startingBalance > 0
+      ? ((realizedPnL + cashFlowBreakdown.net) / startingBalance) * 100
       : 0;
 
     // Store results
     this.stats = {
-      currentAccount,
+      realizedAccount,
       openRisk,
       realizedPnL,
       wins: winsLosses.wins,
       losses: winsLosses.losses,
       totalTrades: winsLosses.total,
       winRate,
+      profitFactor,
       avgWinLossRatio,
       tradeExpectancy,
-      totalPnL: pnlResult.pnl,
-      accountAtRangeStart: pnlResult.startingBalance,
-      accountAtRangeStartDate: pnlResult.startDateStr,
+      totalPnL: realizedPnL,
+      accountAtRangeStart: startingBalance,
+      accountAtRangeStartDate: startDateStr,
       tradingGrowth,
       totalGrowth,
-      netCashFlow,
-      deposits,
-      withdrawals
+      netCashFlow: cashFlowBreakdown.net,
+      deposits: cashFlowBreakdown.deposits,
+      withdrawals: cashFlowBreakdown.withdrawals
     };
   }
 
@@ -512,26 +495,11 @@ class Stats {
     // Update date range display
     this.updateDateRangeDisplay();
 
-    // Current Account
+    // Current Account (Realized balance only)
     if (this.elements.openPositions) {
-      this.elements.openPositions.textContent = `$${this.formatNumber(s.currentAccount)}`;
+      this.elements.openPositions.textContent = `$${this.formatNumber(s.realizedAccount)}`;
     }
-    if (this.elements.openRisk) {
-      this.elements.openRisk.innerHTML = `<span class="stat-card__sub--danger">$${this.formatNumber(s.openRisk)}</span> open risk`;
-    }
-
-    // Realized P&L
-    if (this.elements.totalPnL) {
-      const isPositive = s.realizedPnL >= 0;
-      this.elements.totalPnL.textContent = isPositive
-        ? `+$${this.formatNumber(Math.abs(s.realizedPnL))}`
-        : `-$${this.formatNumber(Math.abs(s.realizedPnL))}`;
-      this.elements.pnlCard?.classList.toggle('stat-card--success', isPositive && s.realizedPnL !== 0);
-      this.elements.pnlCard?.classList.toggle('stat-card--danger', !isPositive);
-    }
-    if (this.elements.pnlTrades) {
-      this.elements.pnlTrades.innerHTML = `<span class="stat-card__sub--highlight">${s.totalTrades}</span> realized trade${s.totalTrades !== 1 ? 's' : ''}`;
-    }
+    // Subtitle is now static "Realized trades only" in HTML
 
     // Win Rate
     if (this.elements.winRate) {
@@ -539,6 +507,31 @@ class Stats {
     }
     if (this.elements.winLoss) {
       this.elements.winLoss.innerHTML = `<span class="stat-card__sub--success-glow">${s.wins} win${s.wins !== 1 ? 's' : ''}</span> · <span class="stat-card__sub--danger">${s.losses} loss${s.losses !== 1 ? 'es' : ''}</span>`;
+    }
+
+    // Profit Factor
+    if (this.elements.profitFactor) {
+      if (s.profitFactor !== null) {
+        this.elements.profitFactor.textContent = s.profitFactor.toFixed(2);
+
+        // Color the card based on profit factor value
+        const isPositive = s.profitFactor > 1.0;
+        const isNegative = s.profitFactor < 1.0;
+        this.elements.profitFactorCard?.classList.toggle('stat-card--success', isPositive);
+        this.elements.profitFactorCard?.classList.toggle('stat-card--danger', isNegative);
+
+        // Update description with colored values
+        if (this.elements.profitFactorSub) {
+          const formattedValue = `$${s.profitFactor.toFixed(2)}`;
+          this.elements.profitFactorSub.innerHTML = ` Amount made for every <span class="stat-card__sub--danger">$1.00</span> lost`;
+        }
+      } else {
+        this.elements.profitFactor.textContent = '-';
+        this.elements.profitFactorCard?.classList.remove('stat-card--success', 'stat-card--danger');
+        if (this.elements.profitFactorSub) {
+          this.elements.profitFactorSub.textContent = 'Total wins / total losses';
+        }
+      }
     }
 
     // Average Win/Loss Ratio
@@ -637,23 +630,123 @@ class Stats {
       }
 
       const filterState = this.filters.getActiveFilter();
+      const allTrades = state.journal.entries;
+      const cashFlowTransactions = state.cashFlow?.transactions || [];
+      const startingBalance = state.settings.startingAccountSize;
 
-      // Build full equity curve (no filters) for accurate calculations
-      const curveObject = await equityCurveManager.buildEquityCurve(null, null);
+      // Build timeline of balance changes from trade exits and cash flow
+      const events = [];
 
-      // Convert object to array format for chart
-      let curveData = Object.entries(curveObject)
-        .map(([date, data]) => ({
+      // Add trade close events (including trimmed trades)
+      allTrades.forEach(trade => {
+        if (trade.status === 'closed' && trade.exitDate) {
+          const exitDateStr = trade.exitDate.split('T')[0];
+          events.push({
+            date: exitDateStr,
+            type: 'trade_close',
+            pnl: trade.pnl || 0
+          });
+        } else if (trade.status === 'trimmed' && trade.trimHistory) {
+          // Add event for each trim
+          trade.trimHistory.forEach(trim => {
+            const trimDateStr = trim.date.split('T')[0];
+            events.push({
+              date: trimDateStr,
+              type: 'trim',
+              pnl: trim.pnl || 0
+            });
+          });
+        }
+      });
+
+      // Add cash flow events
+      cashFlowTransactions.forEach(tx => {
+        const txDate = new Date(tx.timestamp);
+        const txDateStr = marketHours.formatDate(txDate);
+        const amount = tx.type === 'deposit' ? tx.amount : -tx.amount;
+        events.push({
+          date: txDateStr,
+          type: 'cashflow',
+          cashflow: amount
+        });
+      });
+
+      // Sort events by date
+      events.sort((a, b) => a.date.localeCompare(b.date));
+
+      // Build cumulative balance data points
+      let curveData = [];
+      let currentBalance = startingBalance;
+
+      // Add starting point
+      if (events.length > 0) {
+        curveData.push({
+          date: events[0].date,
+          balance: startingBalance,
+          realizedBalance: startingBalance,
+          unrealizedPnL: 0,
+          dayPnL: 0,
+          cashFlow: 0
+        });
+      }
+
+      // Aggregate events by date
+      const eventsByDate = {};
+      events.forEach(event => {
+        if (!eventsByDate[event.date]) {
+          eventsByDate[event.date] = { pnl: 0, cashflow: 0 };
+        }
+        if (event.pnl) eventsByDate[event.date].pnl += event.pnl;
+        if (event.cashflow) eventsByDate[event.date].cashflow += event.cashflow;
+      });
+
+      // Create data points for each date with events
+      Object.keys(eventsByDate).sort().forEach(date => {
+        const event = eventsByDate[date];
+        const dayPnL = event.pnl;
+        const dayCashFlow = event.cashflow;
+        currentBalance += dayPnL + dayCashFlow;
+
+        curveData.push({
           date,
-          balance: data.balance,
-          realizedBalance: data.realizedBalance,
-          unrealizedPnL: data.unrealizedPnL,
-          dayPnL: data.dayPnL,
-          cashFlow: data.cashFlow
-        }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+          balance: currentBalance,
+          realizedBalance: currentBalance,
+          unrealizedPnL: 0,
+          dayPnL,
+          cashFlow: dayCashFlow
+        });
+      });
 
-      // Filter curve data for display (after calculation)
+      // Extend curve to today if today is after the last data point
+      const today = new Date();
+      const todayStr = marketHours.formatDate(today);
+
+      if (curveData.length > 0) {
+        const lastPoint = curveData[curveData.length - 1];
+        if (lastPoint.date < todayStr) {
+          // Add a data point for today with the same balance as the last point
+          curveData.push({
+            date: todayStr,
+            balance: currentBalance,
+            realizedBalance: currentBalance,
+            unrealizedPnL: 0,
+            dayPnL: 0,
+            cashFlow: 0
+          });
+        }
+      } else if (events.length === 0) {
+        // No events at all - show starting balance from beginning to today
+        curveData.push({
+          date: todayStr,
+          balance: startingBalance,
+          realizedBalance: startingBalance,
+          unrealizedPnL: 0,
+          dayPnL: 0,
+          cashFlow: 0
+        });
+      }
+
+      // Filter curve data for display
       if (filterState.dateFrom || filterState.dateTo) {
         curveData = curveData.filter(point => {
           let inRange = true;
@@ -677,7 +770,6 @@ class Stats {
       }
     } catch (error) {
       logger.error('Error rendering equity curve:', error);
-      logger.error('Error stack:', error.stack);
       showToast(`Error loading equity curve: ${error.message}`, 'error');
     } finally {
       // Hide loading
@@ -854,8 +946,7 @@ class Stats {
   }
 
   /**
-   * Refresh prices from Finnhub
-   * Also checks if we should save EOD snapshot
+   * Refresh prices for open positions
    * @param {boolean} silent - If true, don't show toast notifications
    */
   async refreshPrices(silent = false) {
@@ -868,16 +959,8 @@ class Stats {
         return;
       }
 
-      // Check if market is closed and if we need to fetch closing prices for EOD
-      const isAfterClose = marketHours.isAfterMarketClose();
-      const tradingDay = marketHours.getTradingDay();
-      const needsEOD = isAfterClose && !eodCacheManager.hasEODData(tradingDay);
-
-      // Fetch prices (will use previous close if after hours, for EOD snapshot)
-      await priceTracker.refreshAllActivePrices(needsEOD);
-
-      // Check if we should save EOD snapshot
-      await this.checkAndSaveEOD();
+      // Fetch current prices for open positions
+      await priceTracker.refreshAllActivePrices();
 
       // Recalculate stats with new prices
       sharedMetrics.recalculateAll();
@@ -900,157 +983,6 @@ class Stats {
   }
 
   /**
-   * Check if we should save EOD snapshot
-   * Saves once per trading day after market close (4pm EST)
-   */
-  async checkAndSaveEOD() {
-    try {
-      const isAfterClose = marketHours.isAfterMarketClose();
-      const tradingDay = marketHours.getTradingDay();
-
-      // Only save if:
-      // 1. It's after market close (after 4pm EST, before next 9:30am EST)
-      // 2. We haven't already saved data for this trading day
-      // 3. The market was actually open today (not a holiday/weekend)
-      //    - We check this by seeing if tradingDay matches current weekday
-      //    - On holidays/weekends, getTradingDay() returns a past date
-      const currentWeekday = marketHours.formatDate(getCurrentWeekday());
-      const isActualTradingDay = tradingDay === currentWeekday;
-
-      if (isAfterClose && !eodCacheManager.hasEODData(tradingDay) && isActualTradingDay) {
-        logger.debug(`[Stats] Market closed, saving EOD snapshot for ${tradingDay}`);
-        await this.saveEODSnapshot(tradingDay);
-      } else if (isAfterClose && !isActualTradingDay) {
-        logger.debug(`[Stats] Not saving EOD for ${tradingDay} because current day is ${currentWeekday} (holiday/weekend)`);
-      }
-    } catch (error) {
-      logger.error('[Stats] Error checking/saving EOD:', error);
-    }
-  }
-
-  /**
-   * Save EOD snapshot for a specific trading day
-   *
-   * Options are stored using unique keys: ticker_strike_expiration_type
-   * This ensures multiple option contracts on the same underlying ticker
-   * don't overwrite each other.
-   *
-   * Format conversion: priceTracker uses hyphen format internally,
-   * but EOD snapshots use underscore format for consistency with
-   * AccountBalanceCalculator and EquityCurveManager.
-   *
-   * @param {string} dateStr - Date in 'YYYY-MM-DD' format
-   */
-  async saveEODSnapshot(dateStr) {
-    try {
-      // Get current prices (should be EOD prices if after 4pm)
-      const priceCache = priceTracker.cache || {};
-      const prices = {};
-      for (const [ticker, data] of Object.entries(priceCache)) {
-        if (data && data.price) {
-          prices[ticker] = data;
-        }
-      }
-
-      // Get options prices from optionsCache (Map with hyphen keys)
-      // Convert to standard underscore format using utility
-      const optionsCache = priceTracker.optionsCache || new Map();
-      for (const [hyphenKey, data] of optionsCache.entries()) {
-        if (data && data.price) {
-          const underscoreKey = convertHyphenKeyToUnderscoreKey(hyphenKey);
-          prices[underscoreKey] = { price: data.price, timestamp: data.timestamp };
-        }
-      }
-
-      // Get trades that were open on this date
-      const openTrades = state.journal.entries.filter(trade => {
-        const entryDateStr = this._getEntryDateString(trade);
-        const enteredBefore = entryDateStr <= dateStr;
-        const notClosedYet = !trade.exitDate || trade.exitDate > dateStr;
-        return isOpenTrade(trade) && enteredBefore && notClosedYet;
-      });
-
-      // Build EOD prices map and track which tickers we have prices for
-      const stockPrices = {};
-      const positionsOwned = [];
-      const incompleteTickers = [];
-
-      for (const trade of openTrades) {
-        let key, priceData;
-
-        if (trade.assetType === 'options') {
-          // Use unique key for options
-          key = `${trade.ticker}_${trade.strike}_${trade.expirationDate}_${trade.optionType}`;
-          priceData = prices[key];
-        } else {
-          // Use ticker for stocks
-          key = trade.ticker;
-          priceData = prices[trade.ticker];
-        }
-
-        if (priceData) {
-          const price = typeof priceData === 'number' ? priceData : priceData.price;
-          stockPrices[key] = price;
-          positionsOwned.push(key);
-        } else {
-          incompleteTickers.push(key);
-        }
-      }
-
-      // Calculate balance using shared calculator
-      const balanceData = accountBalanceCalculator.calculateCurrentBalance({
-        startingBalance: state.settings.startingAccountSize,
-        allTrades: state.journal.entries,
-        cashFlowTransactions: state.cashFlow.transactions,
-        currentPrices: prices
-      });
-
-      // Calculate cash flow for this specific day
-      const dayCashFlow = accountBalanceCalculator.calculateDayCashFlow(
-        state.cashFlow.transactions,
-        dateStr
-      );
-
-      // Determine if data is complete
-      const isIncomplete = incompleteTickers.length > 0;
-
-      // Save snapshot
-      eodCacheManager.saveEODSnapshot(dateStr, {
-        balance: balanceData.balance,
-        realizedBalance: balanceData.realizedBalance,
-        unrealizedPnL: balanceData.unrealizedPnL,
-        stockPrices,
-        positionsOwned,
-        cashFlow: dayCashFlow,
-        timestamp: Date.now(),
-        source: 'finnhub',
-        incomplete: isIncomplete,
-        missingTickers: incompleteTickers
-      });
-
-      if (isIncomplete) {
-        logger.warn(`[Stats] Saved incomplete EOD snapshot for ${dateStr}. Missing tickers:`, incompleteTickers);
-      } else {
-        logger.debug(`[Stats] Saved complete EOD snapshot for ${dateStr}:`, {
-          balance: balanceData.balance,
-          positions: positionsOwned.length
-        });
-      }
-    } catch (error) {
-      logger.error(`[Stats] Failed to save EOD snapshot for ${dateStr}:`, error);
-
-      // Mark day as incomplete with error
-      eodCacheManager.saveEODSnapshot(dateStr, {
-        balance: 0,
-        incomplete: true,
-        error: error.message,
-        timestamp: Date.now(),
-        source: 'finnhub'
-      });
-    }
-  }
-
-  /**
    * Get entry date string from trade timestamp
    * Converts timestamp to 'YYYY-MM-DD' format
    */
@@ -1069,99 +1001,160 @@ class Stats {
     this.selectedWeekRange = weekRange; // Store for later use when opening trades
 
     const allTrades = state.journal.entries;
-    let tradesFiltered;
 
+    // Filter trades OPENED on this date/week
+    let tradesOpened;
     if (weekRange) {
-      // Filter trades within the week range (Monday through Friday)
-      tradesFiltered = allTrades.filter(trade => {
+      tradesOpened = allTrades.filter(trade => {
         const entryDateStr = this._getEntryDateString(trade);
         return entryDateStr >= weekRange.from && entryDateStr <= weekRange.to;
       });
     } else {
-      // Filter trades for single day
-      tradesFiltered = allTrades.filter(trade => {
+      tradesOpened = allTrades.filter(trade => {
         const entryDateStr = this._getEntryDateString(trade);
         return entryDateStr === dateStr;
       });
     }
 
-    // Sort trades by date (oldest to newest) for consistent ordering
-    tradesFiltered.sort((a, b) => {
+    // Sort trades by date (newest to oldest)
+    tradesOpened.sort((a, b) => {
       const dateA = new Date(a.timestamp).getTime();
       const dateB = new Date(b.timestamp).getTime();
-      return dateA - dateB; // Ascending (oldest first)
+      return dateB - dateA; // Descending (newest first)
     });
 
+    // Filter trades CLOSED on this date/week
+    let tradesClosed;
+    if (weekRange) {
+      tradesClosed = allTrades.filter(trade => {
+        const exitDateStr = this._getExitDateString(trade);
+        return exitDateStr && exitDateStr >= weekRange.from && exitDateStr <= weekRange.to;
+      });
+    } else {
+      tradesClosed = allTrades.filter(trade => {
+        const exitDateStr = this._getExitDateString(trade);
+        return exitDateStr === dateStr;
+      });
+    }
+
+    // Sort closed trades by exit date (newest to oldest)
+    tradesClosed.sort((a, b) => {
+      const dateA = this._getExitDate(a);
+      const dateB = this._getExitDate(b);
+      return dateB - dateA; // Descending (newest first)
+    });
+
+    // Format date range text
+    let dateRangeText;
+    if (weekRange) {
+      const fromFormatted = this.formatDateDisplay(weekRange.from);
+      const toFormatted = this.formatDateDisplay(weekRange.to);
+      dateRangeText = `${fromFormatted} - ${toFormatted}`;
+    } else {
+      dateRangeText = this.formatDateDisplay(dateStr);
+    }
+
     // Update date range display
-    const dateRangeContainer = document.getElementById('selectedDayDateRange');
-    if (dateRangeContainer) {
-      // Format date range
-      let dateRangeText;
-      if (weekRange) {
-        const fromFormatted = this.formatDateDisplay(weekRange.from);
-        const toFormatted = this.formatDateDisplay(weekRange.to);
-        dateRangeText = `${fromFormatted} - ${toFormatted}`;
-      } else {
-        dateRangeText = this.formatDateDisplay(dateStr);
-      }
-      dateRangeContainer.textContent = dateRangeText;
+    const dateRange = document.getElementById('selectedDayDateRange');
+    if (dateRange) {
+      dateRange.textContent = dateRangeText;
     }
 
-    // Update trades table
-    const tradesContainer = document.getElementById('selectedDayTrades');
-    if (tradesContainer) {
-      if (tradesFiltered.length === 0) {
-        const emptyMessage = weekRange
-          ? 'No trades opened during this week'
-          : 'No trades opened on this day';
-        tradesContainer.innerHTML = `
-          <div class="selected-day-trades__empty">
-            ${emptyMessage}
-          </div>
-        `;
-      } else {
-        // Use shared journal table renderer (single source of truth!)
-        const tradesHTML = await renderJournalTableRows(tradesFiltered, {
-          shouldAnimate: false,
-          expandedRows: new Set(),
-          statsPageMode: true  // Use simplified columns for stats page
-        });
-
-        tradesContainer.innerHTML = `
-          <table class="journal-table journal-table--stats">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Ticker</th>
-                <th>Options</th>
-                <th>Entry</th>
-                <th>Exit</th>
-                <th>Shares/Cons</th>
-                <th>P&L $</th>
-                <th>P&L %</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${tradesHTML}
-            </tbody>
-          </table>
-        `;
-
-        // Add click handlers to open journal entries with date filter preserved
-        tradesContainer.querySelectorAll('tbody tr').forEach(row => {
-          row.addEventListener('click', (e) => {
-            const tradeId = parseInt(row.dataset.id); // Note: dataset.id not dataset.tradeId
-            // Pass week range if this was a weekly selection
-            if (weekRange) {
-              this.openTradeInJournal(tradeId, null, weekRange);
-            } else {
-              this.openTradeInJournal(tradeId, dateStr);
-            }
-          });
-        });
-      }
+    // Render trades based on current mode
+    if (this.currentTradesMode === 'opened') {
+      await this._renderTradesSection('selectedDayTrades', tradesOpened, weekRange, dateStr, 'opened');
+    } else {
+      await this._renderTradesSection('selectedDayTrades', tradesClosed, weekRange, dateStr, 'closed');
     }
+  }
+
+  /**
+   * Helper to render a trades section (opened or closed)
+   */
+  async _renderTradesSection(containerId, trades, weekRange, dateStr, type) {
+    const tradesContainer = document.getElementById(containerId);
+    if (!tradesContainer) return;
+
+    if (trades.length === 0) {
+      const emptyMessage = weekRange
+        ? `No trades ${type} during this week`
+        : `No trades ${type} on this day`;
+      tradesContainer.innerHTML = `
+        <div class="selected-day-trades__empty">
+          ${emptyMessage}
+        </div>
+      `;
+      tradesContainer.classList.add('selected-day-trades--empty');
+    } else {
+      tradesContainer.classList.remove('selected-day-trades--empty');
+
+      // Use shared journal table renderer
+      const tradesHTML = await renderJournalTableRows(trades, {
+        shouldAnimate: false,
+        expandedRows: new Set(),
+        statsPageMode: true
+      });
+
+      tradesContainer.innerHTML = `
+        <table class="journal-table journal-table--stats">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Ticker</th>
+              <th>Options</th>
+              <th>Entry</th>
+              <th>Exit</th>
+              <th>Shares/Cons</th>
+              <th>P&L $</th>
+              <th>P&L %</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tradesHTML}
+          </tbody>
+        </table>
+      `;
+
+      // Add click handlers
+      tradesContainer.querySelectorAll('tbody tr').forEach(row => {
+        row.addEventListener('click', (e) => {
+          const tradeId = parseInt(row.dataset.id);
+          if (weekRange) {
+            this.openTradeInJournal(tradeId, null, weekRange);
+          } else {
+            this.openTradeInJournal(tradeId, dateStr);
+          }
+        });
+      });
+    }
+  }
+
+  /**
+   * Get exit date string for a trade (handles both closed and trimmed trades)
+   */
+  _getExitDateString(trade) {
+    if (trade.status === 'closed' && trade.exitDate) {
+      return trade.exitDate.split('T')[0];
+    } else if (trade.status === 'trimmed' && trade.trimHistory && trade.trimHistory.length > 0) {
+      // Return the latest trim date
+      const latestTrim = trade.trimHistory[trade.trimHistory.length - 1];
+      return latestTrim.date.split('T')[0];
+    }
+    return null;
+  }
+
+  /**
+   * Get exit date as Date object for sorting
+   */
+  _getExitDate(trade) {
+    if (trade.status === 'closed' && trade.exitDate) {
+      return new Date(trade.exitDate);
+    } else if (trade.status === 'trimmed' && trade.trimHistory && trade.trimHistory.length > 0) {
+      const latestTrim = trade.trimHistory[trade.trimHistory.length - 1];
+      return new Date(latestTrim.date);
+    }
+    return new Date(0);
   }
 
   /**

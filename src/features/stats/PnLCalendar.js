@@ -4,8 +4,6 @@
  */
 
 import { state } from '../../core/state.js';
-import { equityCurveManager } from './EquityCurveManager.js';
-import eodCacheManager from '../../core/eodCacheManager.js';
 import { getCurrentWeekday } from '../../core/utils.js';
 import { createLogger } from '../../utils/logger.js';
 const logger = createLogger('PnLCalendar');
@@ -106,8 +104,8 @@ class PnLCalendar {
   }
 
   /**
-   * Calculate P&L data for all days in the current month
-   * Reads directly from EOD cache to avoid conflicts with stats page date filters
+   * Calculate P&L data from realized trades (closed/trimmed) for the month
+   * Shows P&L only on days when trades were closed
    */
   async calculateMonthData() {
     if (this.isCalculating) return;
@@ -116,87 +114,41 @@ class PnLCalendar {
     try {
       this.monthData.clear();
 
-      // Get all days in the current month
-      const daysInMonth = this._getDaysInMonth();
+      const allTrades = state.journal.entries;
 
-      // Get starting account size for calculating first day
-      const startingAccountSize = state.settings?.startingAccountSize || 0;
+      // Build map of date -> P&L from trade closes
+      const pnlByDate = {};
 
-      // Calculate P&L for each day
-      for (const day of daysInMonth) {
-        if (!day.isCurrentMonth) continue;
-
-        const dateStr = marketHours.formatDate(day.date);
-        const prevDate = this._getPreviousBusinessDay(day.date);
-        const prevDateStr = prevDate ? marketHours.formatDate(prevDate) : null;
-
-        // Use centralized balance provider (single source of truth for today vs historical)
-        let balance = null;
-        let cashFlow = 0;
-
-        if (this.statsCalculator) {
-          // Delegate to StatsCalculator.getBalanceForDate() - single source of truth
-          balance = this.statsCalculator.getBalanceForDate(dateStr);
-
-          // Get cash flow from EOD cache for historical dates, or calculate for today
-          const today = marketHours.formatDate(getCurrentWeekday());
-          if (dateStr === today) {
-            // For today, calculate cash flow from transactions
-            cashFlow = (state.cashFlow?.transactions || [])
-              .filter(tx => {
-                const txDate = new Date(tx.timestamp);
-                const txDateStr = marketHours.formatDate(txDate);
-                return txDateStr === dateStr;
-              })
-              .reduce((sum, tx) => sum + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
-          } else {
-            // For historical dates, use EOD cache
-            const eodData = eodCacheManager.getEODData(dateStr);
-            if (eodData) {
-              cashFlow = eodData.cashFlow || 0;
-            }
-          }
+      allTrades.forEach(trade => {
+        if (trade.status === 'closed' && trade.exitDate) {
+          const exitDateStr = trade.exitDate.split('T')[0];
+          pnlByDate[exitDateStr] = (pnlByDate[exitDateStr] || 0) + (trade.pnl || 0);
+        } else if (trade.status === 'trimmed' && trade.trimHistory) {
+          trade.trimHistory.forEach(trim => {
+            const trimDateStr = trim.date.split('T')[0];
+            pnlByDate[trimDateStr] = (pnlByDate[trimDateStr] || 0) + (trim.pnl || 0);
+          });
         }
+      });
 
-        // Skip if no balance available
-        if (balance === null) {
-          continue;
+      // Add cash flow events
+      const cashFlowTransactions = state.cashFlow?.transactions || [];
+      cashFlowTransactions.forEach(tx => {
+        const txDate = new Date(tx.timestamp);
+        const txDateStr = marketHours.formatDate(txDate);
+        if (!pnlByDate[txDateStr]) {
+          pnlByDate[txDateStr] = 0;
         }
+      });
 
-        // Get previous day balance
-        let prevBalance;
-        if (!prevDateStr) {
-          // First trading day - use starting account size
-          prevBalance = startingAccountSize;
-        } else {
-          // Use centralized balance lookup for previous day
-          if (this.statsCalculator) {
-            prevBalance = this.statsCalculator.getBalanceForDate(prevDateStr);
-            // If still null, use starting balance as fallback
-            if (prevBalance === null) {
-              prevBalance = startingAccountSize;
-            }
-          } else {
-            // Fallback to EOD cache if no calculator available
-            const prevEodData = eodCacheManager.getEODData(prevDateStr);
-            if (prevEodData && !prevEodData.incomplete) {
-              prevBalance = prevEodData.balance;
-            } else {
-              prevBalance = startingAccountSize;
-            }
-          }
-        }
-
-        // Calculate daily P&L: balance change minus cash flow
-        const dailyPnL = balance - prevBalance - cashFlow;
-
-        // Store in monthData
+      // Store in monthData
+      Object.keys(pnlByDate).forEach(dateStr => {
         this.monthData.set(dateStr, {
-          pnl: dailyPnL,
-          balance: balance,
-          cashFlow: cashFlow
+          pnl: pnlByDate[dateStr],
+          balance: 0, // Not needed for simple display
+          cashFlow: 0  // Not needed for simple display
         });
-      }
+      });
     } catch (error) {
       logger.error('[PnLCalendar] Error calculating month data:', error);
     } finally {
@@ -310,10 +262,20 @@ class PnLCalendar {
         } else {
           classes.push('pnl-calendar__cell--neutral');
         }
+      } else if (!isWeekend && !isFuture && day.isCurrentMonth && !isSaturday) {
+        // Also add neutral class for $0 days
+        classes.push('pnl-calendar__cell--neutral');
       }
 
       // Format P&L value
-      const pnlDisplay = pnlValue !== null && pnlValue !== undefined ? this._formatPnL(pnlValue) : '';
+      // Show "$0" for past weekdays with no activity (not weekends, not future, not other month)
+      let pnlDisplay = '';
+      if (pnlValue !== null && pnlValue !== undefined) {
+        pnlDisplay = this._formatPnL(pnlValue);
+      } else if (!isWeekend && !isFuture && day.isCurrentMonth && !isSaturday) {
+        // Show $0 for weekdays with no trading activity
+        pnlDisplay = '+$0.00';
+      }
 
       // Build tooltip with detailed information
       let tooltipText = '';

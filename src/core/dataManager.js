@@ -5,9 +5,6 @@
 import { state } from './state.js';
 import { showToast } from '../components/ui/ui.js';
 import { priceTracker } from './priceTracker.js';
-import { historicalPricesBatcher } from '../features/stats/HistoricalPricesBatcher.js';
-import { equityCurveManager } from '../features/stats/EquityCurveManager.js';
-import eodCacheManager from './eodCacheManager.js';
 import { sharedMetrics } from '../shared/SharedMetrics.js';
 import { storage } from '../utils/storage.js';
 import { createLogger } from '../utils/logger.js';
@@ -234,13 +231,9 @@ export const dataManager = {
 
     // Clear API keys from service objects
     await priceTracker.setApiKey('');
-    historicalPricesBatcher.setApiKey('');
 
     // Clear price tracker cache
     priceTracker.cache.clear();
-
-    // Clear EOD cache
-    await eodCacheManager.clearAllData();
 
     // Reset state
     const savedTheme = state.settings.theme;

@@ -16,6 +16,7 @@ import { FilterPopup } from '../../shared/FilterPopup.js';
 import { renderJournalTableRows } from '../../shared/journalTableRenderer.js';
 import { VirtualScroll } from '../../components/VirtualScroll.js';
 import { createLogger } from '../../utils/logger.js';
+import { storage } from '../../utils/storage.js';
 const logger = createLogger('JournalView');
 
 // Threshold for enabling virtual scrolling (number of trades)
@@ -1343,15 +1344,8 @@ class JournalView {
       return;
     }
 
-    // Import historicalPricesBatcher (shares cache with stats page!)
-    const { historicalPricesBatcher } = await import('../stats/HistoricalPricesBatcher.js');
-
     try {
       let candles;
-
-      // UPDATED: Use historicalPricesBatcher which has permanent cache shared with stats
-      // Check if we have cached historical data for this ticker
-      const cachedPriceData = historicalPricesBatcher.cache[trade.ticker];
 
       const entryDate = new Date(trade.timestamp).toISOString().split('T')[0];
       const closeDate = trade.exitDate || new Date().toISOString().split('T')[0];
@@ -1369,18 +1363,30 @@ class JournalView {
         chartEndDate = contextEndDate.toISOString().split('T')[0];
       }
 
-      if (cachedPriceData && this._hasDataForDateRange(cachedPriceData, chartStartDate, chartEndDate)) {
-        // Use cached data - convert to candle format
-        candles = this._convertPricesToCandles(cachedPriceData, chartStartDate, chartEndDate);
+      // Check for cached chart data
+      const cachedData = this.getCachedChartData(trade.ticker);
+      if (cachedData && this._hasDataForDateRange(cachedData, chartStartDate, chartEndDate)) {
+        // Use cached data
+        candles = this._convertPricesToCandles(cachedData, chartStartDate, chartEndDate);
       } else {
-        // Fetch from Twelve Data (will be cached permanently by historicalPricesBatcher)
-        // Pass tickerDates so it knows to fetch enough data (6 months + buffer)
-        const tickerDates = { [trade.ticker]: chartStartDate };
-        await historicalPricesBatcher.batchFetchPrices([trade.ticker], null, tickerDates);
+        // Fetch from Twelve Data API directly
+        candles = await this._fetchChartData(trade.ticker, chartStartDate, chartEndDate);
 
-        // Now get the cached data
-        const freshData = historicalPricesBatcher.cache[trade.ticker];
-        candles = this._convertPricesToCandles(freshData, chartStartDate, chartEndDate);
+        // Save to cache if we got data
+        if (candles && candles.length > 0) {
+          // Convert candles back to price data format for caching
+          const priceData = {};
+          candles.forEach(c => {
+            priceData[c.time] = {
+              open: c.open,
+              high: c.high,
+              low: c.low,
+              close: c.close,
+              volume: c.volume || 0
+            };
+          });
+          this.saveChartData(trade.ticker, priceData);
+        }
       }
 
       // Clear loading message
@@ -1700,6 +1706,50 @@ class JournalView {
         summaryContainer.style.color = 'var(--text-muted)';
       }
     }
+  }
+
+  /**
+   * Fetch chart data from Twelve Data API
+   * @param {string} ticker - Stock ticker symbol
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @param {string} endDate - End date (YYYY-MM-DD)
+   * @returns {Promise<Array>} Array of candles
+   */
+  async _fetchChartData(ticker, startDate, endDate) {
+    const apiKey = await storage.getItem('twelveDataApiKey');
+    if (!apiKey) {
+      throw new Error('Twelve Data API key required for charts');
+    }
+
+    const url = `https://api.twelvedata.com/time_series?symbol=${ticker}&interval=1day&start_date=${startDate}&end_date=${endDate}&apikey=${apiKey}&format=JSON`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch chart data: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.status === 'error') {
+      throw new Error(data.message || 'Failed to fetch chart data');
+    }
+
+    if (!data.values || data.values.length === 0) {
+      throw new Error('No chart data available for this ticker');
+    }
+
+    // Convert Twelve Data format to candles
+    // Twelve Data returns newest first, so reverse it
+    const candles = data.values.reverse().map(item => ({
+      time: item.datetime,
+      open: parseFloat(item.open),
+      high: parseFloat(item.high),
+      low: parseFloat(item.low),
+      close: parseFloat(item.close),
+      volume: parseFloat(item.volume) || 0
+    }));
+
+    return candles;
   }
 
   /**
